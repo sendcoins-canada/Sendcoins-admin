@@ -8,6 +8,7 @@ import { AuthGuard } from '@nestjs/passport';
 
 // Endpoints that are allowed without JWT (public)
 const PUBLIC_PATHS: { method: string; pathPrefix: string }[] = [
+  { method: 'GET', pathPrefix: '/health' },
   { method: 'POST', pathPrefix: '/auth/admin/login' },
   { method: 'POST', pathPrefix: '/auth/admin/forgot-password' },
   { method: 'POST', pathPrefix: '/auth/admin/set-password' },

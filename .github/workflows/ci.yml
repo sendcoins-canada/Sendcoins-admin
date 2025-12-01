@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sendcoins_admin_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sendcoins_admin_ci?schema=public
+      JWT_SECRET: test-jwt-secret
+      ZEPTO_HOST: smtp.zeptomail.com
+      ZEPTO_PORT: 587
+      ZEPTO_USER: emailapikey
+      ZEPTO_API_KEY: dummy-api-key
+      MAIL_FROM: "Sendcoins CI <noreply@example.com>"
+      ADMIN_FRONTEND_URL: "http://localhost:4000"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify required env vars
+        run: |
+          test -n "$DATABASE_URL"
+          test -n "$JWT_SECRET"
+
+      - name: Security audit (high severity)
+        run: npm audit --audit-level=high
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in {1..20}; do
+            if pg_isready -h localhost -p 5432 -U postgres; then
+              echo "Postgres is ready"
+              break
+            fi
+            echo "Waiting for Postgres..."
+            sleep 3
+          done
+
+      - name: Run Prisma migrations (db push)
+        run: npx prisma db push
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run unit tests
+        run: npm test -- --runInBand
+
+      - name: Run e2e tests
+        run: npm run test:e2e -- --runInBand
+
+
