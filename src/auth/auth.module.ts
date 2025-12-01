@@ -7,6 +7,7 @@ import { JwtStrategy } from './jwt.strategy';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MailModule } from '../mail/mail.module';
 import { AdminAuthAuditService } from './admin-audit.service';
+import { PermissionsGuard } from './permissions.guard';
 
 @Module({
   imports: [
@@ -18,8 +19,13 @@ import { AdminAuthAuditService } from './admin-audit.service';
       signOptions: { expiresIn: '1h' },
     }),
   ],
-  providers: [AdminAuthService, JwtStrategy, AdminAuthAuditService],
+  providers: [
+    AdminAuthService,
+    JwtStrategy,
+    AdminAuthAuditService,
+    PermissionsGuard,
+  ],
   controllers: [AdminAuthController],
-  exports: [JwtModule],
+  exports: [JwtModule, PermissionsGuard],
 })
 export class AuthModule {}

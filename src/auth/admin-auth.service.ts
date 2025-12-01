@@ -6,7 +6,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
-import { AdminStatus } from '@prisma/client';
+import { AdminStatus, Prisma } from '@prisma/client';
+import type { StringValue } from 'ms';
 import { ValidatePasswordTokenDto } from './dto/validate-password-token.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -44,6 +45,55 @@ export class AdminAuthService {
   async login(email: string, password: string) {
     const admin = await this.validateAdmin(email, password);
 
+    // Update last login timestamp
+
+    await this.prisma.client.adminUser.update({
+      where: { id: admin.id },
+      data: {
+        lastLoginAt: new Date(),
+      },
+    });
+
+    // Fetch full admin details with role and department
+    // Define the type first to help TypeScript inference
+    type AdminWithRelations = Prisma.AdminUserGetPayload<{
+      include: {
+        dynamicRole: {
+          include: {
+            permissions: true;
+          };
+        };
+        department: true;
+      };
+    }>;
+
+    // Use type assertion to work around IDE TypeScript server cache issues
+    // The Prisma types are correct, but IDE may show errors due to stale type cache
+    // This is safe because the query structure matches the type definition
+
+    const adminWithDetailsRaw = (await this.prisma.client.adminUser.findUnique({
+      where: { id: admin.id },
+
+      include: {
+        dynamicRole: {
+          include: {
+            permissions: true,
+          },
+        },
+        department: true,
+      },
+    })) as unknown as AdminWithRelations | null;
+
+    if (!adminWithDetailsRaw) {
+      throw new UnauthorizedException('Admin user not found');
+    }
+
+    const adminWithDetails = adminWithDetailsRaw;
+
+    // Type-safe access to relations
+    const department = adminWithDetails.department;
+    const dynamicRole = adminWithDetails.dynamicRole;
+
     const payload = {
       sub: admin.id,
       email: admin.email,
@@ -55,12 +105,44 @@ export class AdminAuthService {
     return {
       accessToken,
       admin: {
-        id: admin.id,
-        email: admin.email,
-        firstName: admin.firstName,
-        lastName: admin.lastName,
-        role: admin.role,
-        status: admin.status,
+        id: adminWithDetails.id,
+        email: adminWithDetails.email,
+        firstName: adminWithDetails.firstName,
+        lastName: adminWithDetails.lastName,
+
+        profile: adminWithDetails.profile ?? null,
+        role: adminWithDetails.role, // Legacy role
+
+        roleId: adminWithDetails.roleId ?? null,
+
+        dynamicRole: dynamicRole
+          ? {
+              id: dynamicRole.id,
+
+              title: dynamicRole.title,
+
+              status: dynamicRole.status,
+
+              permissions: dynamicRole.permissions
+                .filter((p: { isActive: boolean }) => p.isActive)
+                .map((p: { permission: string }) => p.permission),
+            }
+          : null,
+
+        departmentId: adminWithDetails.departmentId ?? null,
+
+        department: department
+          ? {
+              id: department.id,
+
+              name: department.name,
+
+              description: department.description ?? null,
+            }
+          : null,
+
+        lastLoginAt: adminWithDetails.lastLoginAt ?? null,
+        status: adminWithDetails.status,
       },
     };
   }
@@ -140,10 +222,10 @@ export class AdminAuthService {
       where: { id: admin.id },
       data: {
         password: passwordHash,
-        // explicitly set passwordSet via field update to satisfy typings
-        passwordSet: true as any,
+
+        passwordSet: true,
         lastPasswordChangeAt: new Date(),
-      } as any,
+      },
     });
 
     await this.audit.log('ADMIN_PASSWORD_SET', updated.id, {
@@ -168,7 +250,9 @@ export class AdminAuthService {
         type: 'admin' as const,
       };
       const options: JwtSignOptions = {
-        expiresIn: (process.env.ADMIN_PASSWORD_RESET_TTL ?? '1h') as any,
+        expiresIn: (process.env.ADMIN_PASSWORD_RESET_TTL ?? '1h') as
+          | number
+          | StringValue,
       };
       const token = await this.jwtService.signAsync(payload, options);
 
@@ -214,9 +298,10 @@ export class AdminAuthService {
       where: { id: admin.id },
       data: {
         password: passwordHash,
-        passwordSet: true as any,
+
+        passwordSet: true,
         lastPasswordChangeAt: new Date(),
-      } as any,
+      },
     });
 
     await this.audit.log('ADMIN_PASSWORD_CHANGED', updated.id, {

@@ -19,20 +19,56 @@ enum AdminStatus {
   INACTIVE
 }
 
+enum Permission {
+  READ_USERS
+  SUSPEND_USERS
+  READ_TRANSACTIONS
+  VERIFY_TRANSACTIONS
+  READ_TX_HASH
+  READ_WALLETS
+  FREEZE_WALLETS
+  READ_AUDIT_LOGS
+  VERIFY_KYC
+}
+
+enum RoleStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Department {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique @db.VarChar(100)
+  description String?   @db.VarChar(500)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamp(6)
+
+  // Relations
+  adminUsers  AdminUser[]
+}
+
 model AdminUser {
   id                  Int          @id @default(autoincrement())
   email               String       @unique @db.VarChar(255)
   firstName           String       @db.VarChar(100)
   lastName            String       @db.VarChar(100)
-  profile             String?      @db.VarChar(255)
-  department          String?      @db.VarChar(100)
-  role                AdminRole    @default(ENGINEER)
+  profile             String?      @db.VarChar(255) // Profile image URL
+  departmentId        Int?         // Reference to Department
+  role                AdminRole    @default(ENGINEER) // Legacy field, kept for migration
+  roleId              Int?         // New dynamic role reference
   status              AdminStatus  @default(ACTIVE)
   password            String       @db.VarChar(255)
   passwordSet         Boolean      @default(false)
   lastPasswordChangeAt DateTime?   @db.Timestamp(6)
+  lastLoginAt         DateTime?    @db.Timestamp(6) // Last login timestamp
   createdAt           DateTime     @default(now()) @db.Timestamp(6)
   updatedAt           DateTime     @updatedAt @db.Timestamp(6)
+
+  // Relations
+  department          Department?  @relation(fields: [departmentId], references: [id])
+  dynamicRole         Role?        @relation("AdminUserRole", fields: [roleId], references: [id])
+  rolesCreated        Role[]       @relation("RoleCreatedBy")
+  rolesLastUpdated    Role[]       @relation("RoleLastUpdatedBy")
 }
 
 model AdminAuditLog {
@@ -42,6 +78,37 @@ model AdminAuditLog {
   action     String   @db.VarChar(100)
   detail     Json?
   createdAt  DateTime @default(now()) @db.Timestamp(6)
+}
+
+model Role {
+  id            Int          @id @default(autoincrement())
+  title         String       @db.VarChar(255)
+  description   String?      @db.Text
+  status        RoleStatus   @default(ACTIVE)
+  createdById   Int
+  lastUpdatedById Int?
+  createdAt     DateTime     @default(now()) @db.Timestamp(6)
+  updatedAt     DateTime     @updatedAt @db.Timestamp(6)
+
+  // Relations
+  createdBy     AdminUser    @relation("RoleCreatedBy", fields: [createdById], references: [id])
+  lastUpdatedBy AdminUser?   @relation("RoleLastUpdatedBy", fields: [lastUpdatedById], references: [id])
+  permissions   RolePermission[]
+  adminUsers    AdminUser[]  @relation("AdminUserRole")
+}
+
+model RolePermission {
+  id          Int       @id @default(autoincrement())
+  roleId      Int
+  permission  Permission
+  isActive    Boolean   @default(true) // true = active permission, false = excluded permission
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+
+  // Relations
+  role        Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permission])
+  @@index([roleId])
 }
 
 model apple_user_names {

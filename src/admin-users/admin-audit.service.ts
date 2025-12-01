@@ -5,12 +5,19 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AdminAuditService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async log(action: string, adminId?: number, actorId?: number, detail?: any) {
+  async log(
+    action: string,
+    adminId?: number,
+    actorId?: number,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    detail?: any,
+  ) {
     await this.prisma.client.adminAuditLog.create({
       data: {
         action,
         adminId,
         actorId,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         detail: detail ?? undefined,
       },
     });

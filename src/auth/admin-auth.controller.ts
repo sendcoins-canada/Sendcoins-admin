@@ -1,4 +1,11 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  Req,
+  UseGuards,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
@@ -67,7 +74,16 @@ export class AdminAuthController {
       'Change password for the currently authenticated admin using current password.',
   })
   @ApiBody({ type: ChangePasswordDto })
-  changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
+  changePassword(
+    @Req()
+    req: {
+      user?: { id: number };
+    },
+    @Body() dto: ChangePasswordDto,
+  ) {
+    if (!req.user?.id) {
+      throw new UnauthorizedException('User not authenticated');
+    }
     return this.adminAuthService.changePassword(req.user.id, dto);
   }
 }

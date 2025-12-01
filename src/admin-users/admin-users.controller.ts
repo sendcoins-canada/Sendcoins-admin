@@ -5,7 +5,13 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { AdminRole } from '../auth/roles.enum';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiTags,
+  ApiResponse,
+} from '@nestjs/swagger';
 
 @ApiTags('AdminUsers')
 @ApiBearerAuth()
@@ -19,9 +25,52 @@ export class AdminUsersController {
   @ApiOperation({
     summary: 'Create admin user',
     description:
-      'Create a new admin user and email them a password setup link.',
+      'Create a new admin user and email them a password setup link. You can assign a dynamic role (roleId) for fine-grained permissions, or use the legacy role enum. If roleId is provided, it takes precedence over the role enum. You can also assign a department (departmentId) from the departments list.',
   })
   @ApiBody({ type: CreateAdminUserDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Admin user created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        email: { type: 'string', example: 'jane.doe@example.com' },
+        firstName: { type: 'string', example: 'Jane' },
+        lastName: { type: 'string', example: 'Doe' },
+        departmentId: { type: 'number', example: 1, nullable: true },
+        department: {
+          type: 'object',
+          nullable: true,
+          properties: {
+            id: { type: 'number', example: 1 },
+            name: { type: 'string', example: 'Engineering' },
+            description: {
+              type: 'string',
+              example: 'Handles product development',
+            },
+          },
+        },
+        role: {
+          type: 'string',
+          enum: Object.values(AdminRole),
+          example: 'ENGINEER',
+        },
+        roleId: { type: 'number', example: 1, nullable: true },
+        dynamicRole: {
+          type: 'object',
+          nullable: true,
+          properties: {
+            id: { type: 'number', example: 1 },
+            title: { type: 'string', example: 'Compliance Officer' },
+            status: { type: 'string', example: 'ACTIVE' },
+          },
+        },
+        status: { type: 'string', example: 'ACTIVE' },
+        createdAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
   create(@Body() dto: CreateAdminUserDto) {
     return this.adminUsersService.createAdmin(dto);
   }

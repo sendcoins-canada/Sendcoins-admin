@@ -33,7 +33,7 @@ describe('App e2e', () => {
         email: seedAdminEmail,
         firstName: 'E2E',
         lastName: 'Admin',
-        department: 'Testing',
+        departmentId: null, // No department for e2e test user
         role: AdminRole.SUPER_ADMIN,
         status: AdminStatus.ACTIVE,
         password: passwordHash,
@@ -64,6 +64,7 @@ describe('App e2e', () => {
       .expect(201);
 
     expect(res.body).toHaveProperty('accessToken');
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(res.body.admin).toMatchObject({
       email: seedAdminEmail.toLowerCase(),
       role: 'SUPER_ADMIN',
