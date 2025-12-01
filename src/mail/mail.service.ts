@@ -14,10 +14,9 @@ export class MailService {
 
   async send(options: nodemailer.SendMailOptions): Promise<boolean> {
     try {
-      const info = await this.transporter.sendMail(options);
+      await this.transporter.sendMail(options);
       return true;
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.error('Mail not sent', error);
       return false;
     }
@@ -29,7 +28,8 @@ export class MailService {
     firstName?: string,
   ): Promise<boolean> {
     const name = firstName ?? 'there';
-    const frontendUrl = process.env.ADMIN_FRONTEND_URL ?? 'http://localhost:4000';
+    const frontendUrl =
+      process.env.ADMIN_FRONTEND_URL ?? 'http://localhost:4000';
     const url = `${frontendUrl.replace(/\/$/, '')}/set-password?token=${encodeURIComponent(
       token,
     )}`;
@@ -58,7 +58,8 @@ SendCoins Team`,
     firstName?: string,
   ): Promise<boolean> {
     const name = firstName ?? 'there';
-    const frontendUrl = process.env.ADMIN_FRONTEND_URL ?? 'http://localhost:4000';
+    const frontendUrl =
+      process.env.ADMIN_FRONTEND_URL ?? 'http://localhost:4000';
     const url = `${frontendUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(
       token,
     )}`;
@@ -81,5 +82,3 @@ SendCoins Team`,
     });
   }
 }
-
-

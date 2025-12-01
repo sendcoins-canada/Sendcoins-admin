@@ -16,5 +16,3 @@ export class ChangePasswordDto {
   @MinLength(8)
   confirmPassword: string;
 }
-
-

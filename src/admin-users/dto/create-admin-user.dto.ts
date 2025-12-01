@@ -24,5 +24,3 @@ export class CreateAdminUserDto {
   @IsEnum(AdminRole)
   role: AdminRole;
 }
-
-

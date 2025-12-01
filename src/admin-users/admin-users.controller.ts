@@ -37,5 +37,3 @@ export class AdminUsersController {
     return this.adminUsersService.resendInvite(Number(id));
   }
 }
-
-

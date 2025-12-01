@@ -25,7 +25,9 @@ async function bootstrap() {
   app.use(helmet());
 
   // CORS
-  const corsOrigins = (process.env.ADMIN_CORS_ORIGINS || 'http://localhost:4000')
+  const corsOrigins = (
+    process.env.ADMIN_CORS_ORIGINS || 'http://localhost:4000'
+  )
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);

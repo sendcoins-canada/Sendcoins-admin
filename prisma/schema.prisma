@@ -31,6 +31,11 @@ model AdminUser {
   password            String       @db.VarChar(255)
   passwordSet         Boolean      @default(false)
   lastPasswordChangeAt DateTime?   @db.Timestamp(6)
+  mfaEnabled          Boolean      @default(false)
+  mfaSecret           String?      @db.VarChar(255)
+  mfaBackupCodes      Json?
+  lastMfaAt           DateTime?    @db.Timestamp(6)
+  allowedIps          Json?
   createdAt           DateTime     @default(now()) @db.Timestamp(6)
   updatedAt           DateTime     @updatedAt @db.Timestamp(6)
 }
