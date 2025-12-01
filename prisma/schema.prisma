@@ -7,6 +7,43 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum AdminRole {
+  SUPER_ADMIN
+  COMPLIANCE
+  ENGINEER
+  TEST
+}
+
+enum AdminStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model AdminUser {
+  id                  Int          @id @default(autoincrement())
+  email               String       @unique @db.VarChar(255)
+  firstName           String       @db.VarChar(100)
+  lastName            String       @db.VarChar(100)
+  profile             String?      @db.VarChar(255)
+  department          String?      @db.VarChar(100)
+  role                AdminRole    @default(ENGINEER)
+  status              AdminStatus  @default(ACTIVE)
+  password            String       @db.VarChar(255)
+  passwordSet         Boolean      @default(false)
+  lastPasswordChangeAt DateTime?   @db.Timestamp(6)
+  createdAt           DateTime     @default(now()) @db.Timestamp(6)
+  updatedAt           DateTime     @updatedAt @db.Timestamp(6)
+}
+
+model AdminAuditLog {
+  id         Int      @id @default(autoincrement())
+  adminId    Int?
+  actorId    Int?
+  action     String   @db.VarChar(100)
+  detail     Json?
+  createdAt  DateTime @default(now()) @db.Timestamp(6)
+}
+
 model apple_user_names {
   id         Int       @id @default(autoincrement())
   apple_id   String    @unique @db.VarChar(255)
