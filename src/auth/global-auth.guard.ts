@@ -1,8 +1,4 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
 
@@ -22,7 +18,9 @@ export class GlobalAuthGuard extends AuthGuard('jwt') implements CanActivate {
   }
 
   canActivate(context: ExecutionContext) {
-    const request = context.switchToHttp().getRequest<Request & { path: string }>();
+    const request = context
+      .switchToHttp()
+      .getRequest<Request & { path: string }>();
     const method = (request.method || 'GET').toUpperCase();
     const path = request.path || '';
 
@@ -37,5 +35,3 @@ export class GlobalAuthGuard extends AuthGuard('jwt') implements CanActivate {
     return super.canActivate(context) as any;
   }
 }
-
-

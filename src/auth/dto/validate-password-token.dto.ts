@@ -6,5 +6,3 @@ export class ValidatePasswordTokenDto {
   @IsString()
   token: string;
 }
-
-

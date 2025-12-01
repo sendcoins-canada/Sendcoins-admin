@@ -67,10 +67,12 @@ export class AdminAuthService {
 
   async validatePasswordToken(dto: ValidatePasswordTokenDto) {
     try {
-      const payload = await this.jwtService.verifyAsync<JwtPayload & {
-        purpose?: string;
-        type?: string;
-      }>(dto.token);
+      const payload = await this.jwtService.verifyAsync<
+        JwtPayload & {
+          purpose?: string;
+          type?: string;
+        }
+      >(dto.token);
 
       if (payload.type !== 'admin') {
         throw new UnauthorizedException('Invalid token type');
@@ -224,5 +226,3 @@ export class AdminAuthService {
     return { success: true };
   }
 }
-
-

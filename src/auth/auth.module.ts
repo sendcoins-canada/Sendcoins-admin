@@ -23,5 +23,3 @@ import { AdminAuthAuditService } from './admin-audit.service';
   exports: [JwtModule],
 })
 export class AuthModule {}
-
-

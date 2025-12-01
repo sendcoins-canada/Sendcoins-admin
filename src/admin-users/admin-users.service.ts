@@ -34,7 +34,10 @@ export class AdminUsersService {
         },
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
         throw new ConflictException('Admin with this email already exists');
       }
       throw err;
@@ -109,5 +112,3 @@ export class AdminUsersService {
     return { success: true };
   }
 }
-
-

@@ -16,7 +16,10 @@ export class AdminAuthController {
 
   @Post('login')
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
-  @ApiOperation({ summary: 'Admin login', description: 'Authenticate an admin user and return a JWT.' })
+  @ApiOperation({
+    summary: 'Admin login',
+    description: 'Authenticate an admin user and return a JWT.',
+  })
   @ApiBody({ type: AdminLoginDto })
   login(@Body() dto: AdminLoginDto) {
     return this.adminAuthService.login(dto.email, dto.password);
@@ -68,5 +71,3 @@ export class AdminAuthController {
     return this.adminAuthService.changePassword(req.user.id, dto);
   }
 }
-
-

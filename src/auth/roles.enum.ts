@@ -4,5 +4,3 @@ export enum AdminRole {
   ENGINEER = 'ENGINEER',
   TEST = 'TEST',
 }
-
-
