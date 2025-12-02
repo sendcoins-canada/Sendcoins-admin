@@ -161,8 +161,8 @@ async function main() {
 
   const securityOfficerRole = await prisma.role.upsert({
     where: { id: 3 },
-    update: {},
-    create: {
+      update: {},
+      create: {
       id: 3,
       title: 'Security Officer',
       description: 'Full access to suspend users and freeze wallets',
@@ -183,7 +183,7 @@ async function main() {
     include: { permissions: true },
   });
 
-  // eslint-disable-next-line no-console
+    // eslint-disable-next-line no-console
   console.log('Seeded roles:', {
     superAdmin: {
       id: superAdminRole.id,
@@ -242,8 +242,8 @@ async function main() {
       status: AdminStatus.ACTIVE,
       password: supportAdminPassword,
       passwordSet: true,
-    },
-  });
+      },
+    });
 
   // eslint-disable-next-line no-console
   console.log('Seeded admin users with roles:', {
@@ -256,8 +256,8 @@ async function main() {
       email: supportAdmin.email,
       roleId: supportAdmin.roleId,
       password: 'Support123!@#',
-    },
-  });
+      },
+    });
 }
 
 main()

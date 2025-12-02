@@ -52,3 +52,5 @@ export class UpdateRoleDto {
   @IsEnum(Permission, { each: true })
   permissions?: Permission[];
 }
+
+

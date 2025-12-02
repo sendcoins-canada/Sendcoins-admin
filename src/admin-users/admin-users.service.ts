@@ -49,16 +49,11 @@ export class AdminUsersService {
       }
     }
 
-    // Define type for admin with department relation
-    type AdminWithDepartment = Prisma.AdminUserGetPayload<{
-      include: {
-        department: true;
-      };
-    }>;
-
-    let admin: AdminWithDepartment;
+    // Using a loosely-typed admin object here to avoid tight coupling
+    // to Prisma's generated helper types, which can change between versions.
+    let admin: any;
     try {
-      admin = (await this.prisma.client.adminUser.create({
+      admin = await this.prisma.client.adminUser.create({
         data: {
           email: dto.email.toLowerCase(),
           firstName: dto.firstName,
@@ -71,11 +66,10 @@ export class AdminUsersService {
           password: 'TEMP_PASSWORD_PLACEHOLDER',
           passwordSet: false,
         },
-
         include: {
           department: true,
         },
-      })) as unknown as AdminWithDepartment;
+      });
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&

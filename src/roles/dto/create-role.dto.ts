@@ -38,3 +38,5 @@ export class CreateRoleDto {
   @IsEnum(Permission, { each: true })
   permissions!: Permission[];
 }
+
+
