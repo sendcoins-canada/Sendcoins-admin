@@ -9,6 +9,7 @@ import { RolesModule } from './roles/roles.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { UsersModule } from './users/users.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
+import { TransactionsModule } from './transactions/transactions.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { GlobalAuthGuard } from './auth/global-auth.guard';
@@ -23,6 +24,7 @@ import { GlobalAuthGuard } from './auth/global-auth.guard';
     DepartmentsModule,
     UsersModule,
     AuditLogsModule,
+    TransactionsModule,
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,

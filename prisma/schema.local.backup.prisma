@@ -17,25 +17,25 @@ model AdminAuditLog {
 }
 
 model AdminUser {
-  id                  Int          @id @default(autoincrement())
-  email               String       @unique @db.VarChar(255)
-  firstName           String       @db.VarChar(100)
-  lastName            String       @db.VarChar(100)
-  profile             String?      @db.VarChar(255)
-  departmentId        Int?
-  role                AdminRole    @default(ENGINEER)
-  roleId              Int?
-  status              AdminStatus  @default(ACTIVE)
-  password            String       @db.VarChar(255)
-  passwordSet         Boolean      @default(false)
-  lastPasswordChangeAt DateTime?   @db.Timestamp(6)
-  lastLoginAt         DateTime?    @db.Timestamp(6)
-  createdAt           DateTime     @default(now()) @db.Timestamp(6)
-  updatedAt           DateTime     @updatedAt @db.Timestamp(6)
-  department          Department?  @relation(fields: [departmentId], references: [id])
-  dynamicRole         Role?        @relation("AdminUserRole", fields: [roleId], references: [id])
-  rolesCreated        Role[]       @relation("RoleCreatedBy")
-  rolesLastUpdated    Role[]       @relation("RoleLastUpdatedBy")
+  id                                   Int         @id @default(autoincrement())
+  email                                String      @unique @db.VarChar(255)
+  firstName                            String      @db.VarChar(100)
+  lastName                             String      @db.VarChar(100)
+  profile                              String?     @db.VarChar(255)
+  departmentId                         Int?
+  role                                 AdminRole   @default(ENGINEER)
+  roleId                               Int?
+  status                               AdminStatus @default(ACTIVE)
+  password                             String      @db.VarChar(255)
+  passwordSet                          Boolean     @default(false)
+  lastPasswordChangeAt                 DateTime?   @db.Timestamp(6)
+  lastLoginAt                          DateTime?   @db.Timestamp(6)
+  createdAt                            DateTime    @default(now()) @db.Timestamp(6)
+  updatedAt                            DateTime    @db.Timestamp(6)
+  Department                           Department? @relation(fields: [departmentId], references: [id])
+  Role_AdminUser_roleIdToRole          Role?       @relation("AdminUser_roleIdToRole", fields: [roleId], references: [id])
+  Role_Role_createdByIdToAdminUser     Role[]      @relation("Role_createdByIdToAdminUser")
+  Role_Role_lastUpdatedByIdToAdminUser Role[]      @relation("Role_lastUpdatedByIdToAdminUser")
 }
 
 model Department {
@@ -43,23 +43,23 @@ model Department {
   name        String      @unique @db.VarChar(100)
   description String?     @db.VarChar(500)
   createdAt   DateTime    @default(now()) @db.Timestamp(6)
-  updatedAt   DateTime    @updatedAt @db.Timestamp(6)
-  adminUsers  AdminUser[]
+  updatedAt   DateTime    @db.Timestamp(6)
+  AdminUser   AdminUser[]
 }
 
 model Role {
-  id              Int              @id @default(autoincrement())
-  title           String           @db.VarChar(255)
-  description     String?
-  status          RoleStatus       @default(ACTIVE)
-  createdById     Int
-  lastUpdatedById Int?
-  createdAt       DateTime         @default(now()) @db.Timestamp(6)
-  updatedAt       DateTime         @updatedAt @db.Timestamp(6)
-  adminUsers      AdminUser[]      @relation("AdminUserRole")
-  createdBy       AdminUser        @relation("RoleCreatedBy", fields: [createdById], references: [id])
-  lastUpdatedBy   AdminUser?       @relation("RoleLastUpdatedBy", fields: [lastUpdatedById], references: [id])
-  permissions     RolePermission[]
+  id                                        Int              @id @default(autoincrement())
+  title                                     String           @db.VarChar(255)
+  description                               String?
+  status                                    RoleStatus       @default(ACTIVE)
+  createdById                               Int
+  lastUpdatedById                           Int?
+  createdAt                                 DateTime         @default(now()) @db.Timestamp(6)
+  updatedAt                                 DateTime         @db.Timestamp(6)
+  AdminUser_AdminUser_roleIdToRole          AdminUser[]      @relation("AdminUser_roleIdToRole")
+  AdminUser_Role_createdByIdToAdminUser     AdminUser        @relation("Role_createdByIdToAdminUser", fields: [createdById], references: [id])
+  AdminUser_Role_lastUpdatedByIdToAdminUser AdminUser?       @relation("Role_lastUpdatedByIdToAdminUser", fields: [lastUpdatedById], references: [id])
+  RolePermission                            RolePermission[]
 }
 
 model RolePermission {
