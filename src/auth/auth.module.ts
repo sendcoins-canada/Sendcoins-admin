@@ -8,6 +8,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { MailModule } from '../mail/mail.module';
 import { AdminAuthAuditService } from './admin-audit.service';
 import { PermissionsGuard } from './permissions.guard';
+import { MfaService } from './mfa.service';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { PermissionsGuard } from './permissions.guard';
     JwtStrategy,
     AdminAuthAuditService,
     PermissionsGuard,
+    MfaService,
   ],
   controllers: [AdminAuthController],
   exports: [JwtModule, PermissionsGuard],

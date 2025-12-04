@@ -12,9 +12,24 @@ import { ValidatePasswordTokenDto } from './dto/validate-password-token.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { VerifyMfaDto } from './dto/verify-mfa.dto';
+import { EnableMfaDto } from './dto/enable-mfa.dto';
+import { UpdateIpAllowlistDto } from './dto/update-ip-allowlist.dto';
 import { JwtPayload } from './jwt.strategy';
 import { MailService } from '../mail/mail.service';
 import { AdminAuthAuditService } from './admin-audit.service';
+import { MfaService } from './mfa.service';
+
+type AdminWithRelations = Prisma.AdminUserGetPayload<{
+  include: {
+    dynamicRole: {
+      include: {
+        permissions: true;
+      };
+    };
+    department: true;
+  };
+}>;
 
 @Injectable()
 export class AdminAuthService {
@@ -23,57 +38,12 @@ export class AdminAuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly audit: AdminAuthAuditService,
+    private readonly mfaService: MfaService,
   ) {}
 
-  async validateAdmin(email: string, password: string) {
-    const admin = await this.prisma.client.adminUser.findUnique({
-      where: { email: email.toLowerCase() },
-    });
-
-    if (!admin || admin.status !== AdminStatus.ACTIVE) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const passwordValid = await bcrypt.compare(password, admin.password);
-    if (!passwordValid) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    return admin;
-  }
-
-  async login(email: string, password: string) {
-    const admin = await this.validateAdmin(email, password);
-
-    // Update last login timestamp
-
-    await this.prisma.client.adminUser.update({
-      where: { id: admin.id },
-      data: {
-        lastLoginAt: new Date(),
-      },
-    });
-
-    // Fetch full admin details with role and department
-    // Define the type first to help TypeScript inference
-    type AdminWithRelations = Prisma.AdminUserGetPayload<{
-      include: {
-        dynamicRole: {
-          include: {
-            permissions: true;
-          };
-        };
-        department: true;
-      };
-    }>;
-
-    // Use type assertion to work around IDE TypeScript server cache issues
-    // The Prisma types are correct, but IDE may show errors due to stale type cache
-    // This is safe because the query structure matches the type definition
-
+  private async getAdminWithRelations(adminId: number): Promise<AdminWithRelations> {
     const adminWithDetailsRaw = (await this.prisma.client.adminUser.findUnique({
-      where: { id: admin.id },
-
+      where: { id: adminId },
       include: {
         dynamicRole: {
           include: {
@@ -88,11 +58,111 @@ export class AdminAuthService {
       throw new UnauthorizedException('Admin user not found');
     }
 
-    const adminWithDetails = adminWithDetailsRaw;
+    return adminWithDetailsRaw;
+  }
 
-    // Type-safe access to relations
+  private buildAdminResponse(adminWithDetails: AdminWithRelations) {
     const department = adminWithDetails.department;
     const dynamicRole = adminWithDetails.dynamicRole;
+
+    return {
+      id: adminWithDetails.id,
+      email: adminWithDetails.email,
+      firstName: adminWithDetails.firstName,
+      lastName: adminWithDetails.lastName,
+      profile: adminWithDetails.profile ?? null,
+      role: adminWithDetails.role,
+      roleId: adminWithDetails.roleId ?? null,
+      dynamicRole: dynamicRole
+        ? {
+            id: dynamicRole.id,
+            title: dynamicRole.title,
+            status: dynamicRole.status,
+            permissions: dynamicRole.permissions
+              .filter((p: { isActive: boolean }) => p.isActive)
+              .map((p: { permission: string }) => p.permission),
+          }
+        : null,
+      departmentId: adminWithDetails.departmentId ?? null,
+      department: department
+        ? {
+            id: department.id,
+            name: department.name,
+            description: department.description ?? null,
+          }
+        : null,
+      lastLoginAt: adminWithDetails.lastLoginAt ?? null,
+      status: adminWithDetails.status,
+    };
+  }
+
+  /**
+   * Check if IP is allowed for admin
+   */
+  private checkIpAllowlist(admin: any, clientIp: string): boolean {
+    if (!admin.allowedIps || !Array.isArray(admin.allowedIps)) {
+      return true; // No IP restriction
+    }
+    return admin.allowedIps.includes(clientIp);
+  }
+
+  async validateAdmin(email: string, password: string, clientIp?: string) {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (!admin || admin.status !== AdminStatus.ACTIVE) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Check IP allowlist if configured
+    if (clientIp && !this.checkIpAllowlist(admin, clientIp)) {
+      throw new UnauthorizedException('Access denied from this IP address');
+    }
+
+    const passwordValid = await bcrypt.compare(password, admin.password);
+    if (!passwordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    return admin;
+  }
+
+  async login(email: string, password: string, clientIp?: string) {
+    const admin = await this.validateAdmin(email, password, clientIp);
+
+    // If MFA is enabled, return temporary token for MFA verification
+    if ((admin as any).mfaEnabled && (admin as any).mfaSecret) {
+      const tempPayload = {
+        sub: admin.id,
+        email: admin.email,
+        role: admin.role,
+        purpose: 'mfa_verification' as const,
+        type: 'admin' as const,
+      };
+      const tempToken = await this.jwtService.signAsync(tempPayload, {
+        expiresIn: '5m' as any, // Short-lived token
+      });
+
+      return {
+        requiresMfa: true,
+        tempToken,
+        message:
+          'Please enter your 6-digit authentication code from your authenticator app',
+      };
+    }
+
+    // No MFA, continue with full login flow
+
+    // Update last login timestamp
+    await this.prisma.client.adminUser.update({
+      where: { id: admin.id },
+      data: {
+        lastLoginAt: new Date(),
+      },
+    });
+
+    const adminWithDetails = await this.getAdminWithRelations(admin.id);
 
     const payload = {
       sub: admin.id,
@@ -102,48 +172,103 @@ export class AdminAuthService {
 
     const accessToken = await this.jwtService.signAsync(payload);
 
+    await this.audit.log('ADMIN_LOGIN', admin.id, {
+      email: admin.email,
+      mfaUsed: false,
+    });
+
     return {
       accessToken,
-      admin: {
-        id: adminWithDetails.id,
-        email: adminWithDetails.email,
-        firstName: adminWithDetails.firstName,
-        lastName: adminWithDetails.lastName,
+      admin: this.buildAdminResponse(adminWithDetails),
+    };
+  }
 
-        profile: adminWithDetails.profile ?? null,
-        role: adminWithDetails.role, // Legacy role
+  async verifyMfa(dto: VerifyMfaDto) {
+    let payload: JwtPayload & { purpose?: string; type?: string };
+    try {
+      payload = await this.jwtService.verifyAsync(dto.tempToken);
+    } catch {
+      throw new UnauthorizedException('Invalid or expired token');
+    }
 
-        roleId: adminWithDetails.roleId ?? null,
+    if (payload.purpose !== 'mfa_verification' || payload.type !== 'admin') {
+      throw new UnauthorizedException('Invalid token purpose');
+    }
 
-        dynamicRole: dynamicRole
-          ? {
-              id: dynamicRole.id,
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id: payload.sub },
+    });
 
-              title: dynamicRole.title,
+    if (!admin || admin.status !== AdminStatus.ACTIVE) {
+      throw new UnauthorizedException('Invalid user');
+    }
 
-              status: dynamicRole.status,
+    const adminWithMfa = admin as any;
 
-              permissions: dynamicRole.permissions
-                .filter((p: { isActive: boolean }) => p.isActive)
-                .map((p: { permission: string }) => p.permission),
-            }
-          : null,
+    if (!adminWithMfa.mfaEnabled || !adminWithMfa.mfaSecret) {
+      throw new BadRequestException('MFA is not enabled for this account');
+    }
 
-        departmentId: adminWithDetails.departmentId ?? null,
+    // Try TOTP code first
+    const totpValid = this.mfaService.verifyToken(
+      adminWithMfa.mfaSecret,
+      dto.code,
+    );
 
-        department: department
-          ? {
-              id: department.id,
+    let backupCodeUsed = false;
+    let updatedBackupCodes = adminWithMfa.mfaBackupCodes as string[] | null;
 
-              name: department.name,
+    // If TOTP fails, try backup codes
+    if (!totpValid && adminWithMfa.mfaBackupCodes) {
+      const backupCodes = adminWithMfa.mfaBackupCodes as string[];
+      for (let i = 0; i < backupCodes.length; i++) {
+        const isValid = await this.mfaService.verifyBackupCode(dto.code, [
+          backupCodes[i],
+        ]);
+        if (isValid) {
+          backupCodeUsed = true;
+          // Remove used backup code
+          updatedBackupCodes = this.mfaService.removeBackupCode(
+            backupCodes,
+            backupCodes[i],
+          );
+          break;
+        }
+      }
+    }
 
-              description: department.description ?? null,
-            }
-          : null,
+    if (!totpValid && !backupCodeUsed) {
+      throw new UnauthorizedException('Invalid MFA code');
+    }
 
-        lastLoginAt: adminWithDetails.lastLoginAt ?? null,
-        status: adminWithDetails.status,
-      },
+    // Update lastMfaAt and backup codes if used
+    await this.prisma.client.adminUser.update({
+      where: { id: admin.id },
+      data: {
+        lastMfaAt: new Date(),
+        mfaBackupCodes: updatedBackupCodes as any,
+      } as any,
+    });
+
+    const adminWithDetails = await this.getAdminWithRelations(admin.id);
+
+    // Generate final access token
+    const finalPayload = {
+      sub: admin.id,
+      email: admin.email,
+      role: admin.role,
+    };
+    const accessToken = await this.jwtService.signAsync(finalPayload);
+
+    await this.audit.log('ADMIN_LOGIN', admin.id, {
+      email: admin.email,
+      mfaUsed: true,
+      backupCodeUsed,
+    });
+
+    return {
+      accessToken,
+      admin: this.buildAdminResponse(adminWithDetails),
     };
   }
 
@@ -309,5 +434,196 @@ export class AdminAuthService {
     });
 
     return { success: true };
+  }
+
+  /**
+   * Start MFA setup - generate secret and QR code
+   */
+  async startMfaSetup(adminId: number) {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!admin || admin.status !== AdminStatus.ACTIVE) {
+      throw new UnauthorizedException('Invalid user');
+    }
+
+    if ((admin as any).mfaEnabled) {
+      throw new BadRequestException('MFA is already enabled');
+    }
+
+    const { secret, otpauthUrl } = this.mfaService.generateSecret(
+      admin.email,
+      process.env.MFA_ISSUER_NAME || 'SendCoins Admin',
+    );
+    const qrCode = await this.mfaService.generateQRCode(otpauthUrl);
+
+    // Store secret temporarily (will be confirmed in enableMfa)
+    await this.prisma.client.adminUser.update({
+      where: { id: admin.id },
+      data: {
+        mfaSecret: secret,
+      } as any,
+    });
+
+    return {
+      secret,
+      qrCode,
+      manualEntryKey: secret,
+    };
+  }
+
+  /**
+   * Complete MFA setup by verifying the code
+   */
+  async enableMfa(adminId: number, dto: EnableMfaDto) {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!admin || admin.status !== AdminStatus.ACTIVE) {
+      throw new UnauthorizedException('Invalid user');
+    }
+
+    const adminWithMfa2 = admin as any;
+
+    if (!adminWithMfa2.mfaSecret) {
+      throw new BadRequestException(
+        'MFA setup not started. Call start-mfa-setup first.',
+      );
+    }
+
+    const isValid = this.mfaService.verifyToken(
+      adminWithMfa2.mfaSecret,
+      dto.code,
+    );
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid MFA code');
+    }
+
+    // Generate backup codes
+    const { codes, hashedCodes } =
+      await this.mfaService.generateBackupCodes(10);
+
+    await this.prisma.client.adminUser.update({
+      where: { id: admin.id },
+      data: {
+        mfaEnabled: true as any,
+        mfaBackupCodes: hashedCodes as any,
+      } as any,
+    });
+
+    await this.audit.log('ADMIN_MFA_ENABLED', admin.id, {
+      email: admin.email,
+    });
+
+    return {
+      success: true,
+      backupCodes: codes, // Return plain codes once - user must save them
+    };
+  }
+
+  /**
+   * Disable MFA for an admin
+   */
+  async disableMfa(adminId: number) {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!admin || admin.status !== AdminStatus.ACTIVE) {
+      throw new UnauthorizedException('Invalid user');
+    }
+
+    const adminWithMfa3 = admin as any;
+
+    if (!adminWithMfa3.mfaEnabled) {
+      throw new BadRequestException('MFA is not enabled');
+    }
+
+    await this.prisma.client.adminUser.update({
+      where: { id: admin.id },
+      data: {
+        mfaEnabled: false as any,
+        mfaSecret: null,
+        mfaBackupCodes: null,
+        lastMfaAt: null,
+      } as any,
+    });
+
+    await this.audit.log('ADMIN_MFA_DISABLED', admin.id, {
+      email: admin.email,
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * Generate new backup codes
+   */
+  async generateBackupCodes(adminId: number) {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!admin || admin.status !== AdminStatus.ACTIVE) {
+      throw new UnauthorizedException('Invalid user');
+    }
+
+    const adminWithMfa4 = admin as any;
+
+    if (!adminWithMfa4.mfaEnabled) {
+      throw new BadRequestException('MFA is not enabled');
+    }
+
+    const { codes, hashedCodes } =
+      await this.mfaService.generateBackupCodes(10);
+
+    await this.prisma.client.adminUser.update({
+      where: { id: admin.id },
+      data: {
+        mfaBackupCodes: hashedCodes as any,
+      } as any,
+    });
+
+    await this.audit.log('ADMIN_MFA_BACKUP_CODES_GENERATED', admin.id, {
+      email: admin.email,
+    });
+
+    return {
+      backupCodes: codes, // Return plain codes once
+    };
+  }
+
+  /**
+   * Update IP allowlist for an admin
+   */
+  async updateIpAllowlist(adminId: number, dto: UpdateIpAllowlistDto) {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!admin || admin.status !== AdminStatus.ACTIVE) {
+      throw new UnauthorizedException('Invalid user');
+    }
+
+    const ips = dto.ips || [];
+
+    await this.prisma.client.adminUser.update({
+      where: { id: admin.id },
+      data: {
+        allowedIps: ips as any,
+      } as any,
+    });
+
+    await this.audit.log('ADMIN_IP_ALLOWLIST_UPDATED', admin.id, {
+      email: admin.email,
+      ipCount: ips.length,
+    });
+
+    return {
+      success: true,
+      allowedIps: ips,
+    };
   }
 }

@@ -7,6 +7,7 @@ const PUBLIC_PATHS: { method: string; pathPrefix: string }[] = [
   { method: 'GET', pathPrefix: '/health' },
   { method: 'GET', pathPrefix: '/permissions' }, // Public - just lists available permissions
   { method: 'POST', pathPrefix: '/auth/admin/login' },
+  { method: 'POST', pathPrefix: '/auth/admin/verify-mfa' },
   { method: 'POST', pathPrefix: '/auth/admin/forgot-password' },
   { method: 'POST', pathPrefix: '/auth/admin/set-password' },
   { method: 'POST', pathPrefix: '/auth/admin/validate-password-token' },
