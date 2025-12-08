@@ -2,16 +2,14 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as dotenv from 'dotenv';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { JwtService } from '@nestjs/jwt';
-import { AdminRole } from './auth/roles.enum';
 import helmet from 'helmet';
 import {
   ValidationPipe,
   BadRequestException,
   ValidationError,
 } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
+import basicAuth from 'express-basic-auth';
 
 dotenv.config();
 
@@ -93,32 +91,15 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  // Protect Swagger only in production: require valid JWT with ENGINEER role
+  // Protect Swagger with HTTP Basic Auth in production
   if (process.env.NODE_ENV === 'production') {
-    const jwtService = app.get(JwtService);
     app.use(
       '/api/docs',
-      async (req: Request, res: Response, next: NextFunction) => {
-        try {
-          const authHeader = req.headers.authorization;
-          if (!authHeader?.startsWith('Bearer ')) {
-            return res.status(401).json({ message: 'Unauthorized' });
-          }
-
-          const token = authHeader.substring(7);
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          const payload = await jwtService.verifyAsync(token);
-
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-          if (payload.role !== AdminRole.ENGINEER) {
-            return res.status(403).json({ message: 'Forbidden' });
-          }
-
-          return next();
-        } catch {
-          return res.status(401).json({ message: 'Unauthorized' });
-        }
-      },
+      basicAuth({
+        users: { admin: 'SwaggerDocs2025!' },
+        challenge: true,
+        realm: 'SendCoins Admin API Docs',
+      }),
     );
   }
 
