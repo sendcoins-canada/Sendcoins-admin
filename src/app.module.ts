@@ -5,6 +5,11 @@ import { PrismaModule } from './prisma/prisma.module';
 import { MailModule } from './mail/mail.module';
 import { AuthModule } from './auth/auth.module';
 import { AdminUsersModule } from './admin-users/admin-users.module';
+import { RolesModule } from './roles/roles.module';
+import { DepartmentsModule } from './departments/departments.module';
+import { UsersModule } from './users/users.module';
+import { AuditLogsModule } from './audit-logs/audit-logs.module';
+import { TransactionsModule } from './transactions/transactions.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { GlobalAuthGuard } from './auth/global-auth.guard';
@@ -15,6 +20,11 @@ import { GlobalAuthGuard } from './auth/global-auth.guard';
     MailModule,
     AuthModule,
     AdminUsersModule,
+    RolesModule,
+    DepartmentsModule,
+    UsersModule,
+    AuditLogsModule,
+    TransactionsModule,
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,

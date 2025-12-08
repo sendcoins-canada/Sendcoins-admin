@@ -1,0 +1,737 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AdminUser {
+  id         Int         @id @default(autoincrement())
+  email      String      @unique @db.VarChar(255)
+  firstName  String      @db.VarChar(100)
+  lastName   String      @db.VarChar(100)
+  profile    String?     @db.VarChar(255)
+  department String?     @db.VarChar(100)
+  role       AdminRole   @default(ENGINEER)
+  status     AdminStatus @default(ACTIVE)
+  password   String      @db.VarChar(255)
+  createdAt  DateTime    @default(now()) @db.Timestamp(6)
+  updatedAt  DateTime    @db.Timestamp(6)
+}
+
+model apple_user_names {
+  id         Int       @id @default(autoincrement())
+  apple_id   String    @unique @db.VarChar(255)
+  first_name String?   @db.VarChar(255)
+  last_name  String?   @db.VarChar(255)
+  full_name  String?   @db.VarChar(512)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([apple_id], map: "idx_apple_user_names_apple_id")
+}
+
+model azer_auth_token {
+  token_id   Int     @id @default(autoincrement())
+  useremail  String? @db.VarChar(200)
+  token      String? @db.VarChar(200)
+  created_at String? @db.VarChar(200)
+  expire_at  String? @db.VarChar(200)
+  track_code String? @db.VarChar(200)
+  device     String? @db.VarChar(200)
+
+  @@index([expire_at], map: "idx_azer_auth_token_expire_at")
+  @@index([token], map: "idx_azer_auth_token_token")
+  @@index([track_code], map: "idx_azer_auth_token_track_code")
+  @@index([useremail], map: "idx_azer_auth_token_useremail")
+}
+
+model azer_bnb_wallet {
+  wallet_id          Int      @id @default(autoincrement())
+  wallet_address     String?  @db.VarChar(200)
+  user_api_key       String?  @db.VarChar(200)
+  client_secret_key  String?  @db.VarChar(200)
+  hash               String?  @db.VarChar(200)
+  created_at         String?  @db.VarChar(200)
+  trackcode          String?  @db.VarChar(200)
+  seed               String?  @db.VarChar(200)
+  date               String?  @db.VarChar(200)
+  device             String?  @db.VarChar(200)
+  total_balance      Float?
+  withdrawable_limit Float?
+  locked_amount      Float?
+  a                  Float?
+  b                  Float?
+  name               String?  @db.VarChar(200)
+  network            String?  @db.VarChar(200)
+  timestamp          DateTime @default(now()) @db.Timestamp(6)
+}
+
+model azer_btc_wallet {
+  wallet_id          Int      @id @default(autoincrement())
+  wallet_address     String?  @db.VarChar(200)
+  user_api_key       String?  @db.VarChar(200)
+  client_secret_key  String?  @db.VarChar(200)
+  hash               String?  @db.VarChar(200)
+  created_at         String?  @db.VarChar(200)
+  trackcode          String?  @db.VarChar(200)
+  seed               String?  @db.VarChar(200)
+  date               String?  @db.VarChar(200)
+  device             String?  @db.VarChar(200)
+  total_balance      Float?
+  withdrawable_limit Float?
+  locked_amount      Float?
+  a                  Float?
+  b                  Float?
+  name               String?  @db.VarChar(200)
+  network            String?  @db.VarChar(200)
+  timestamp          DateTime @default(now()) @db.Timestamp(6)
+}
+
+model azer_eth_wallet {
+  wallet_id          Int      @id @default(autoincrement())
+  wallet_address     String?  @db.VarChar(200)
+  user_api_key       String?  @db.VarChar(200)
+  client_secret_key  String?  @db.VarChar(200)
+  hash               String?  @db.VarChar(200)
+  created_at         String?  @db.VarChar(200)
+  trackcode          String?  @db.VarChar(200)
+  seed               String?  @db.VarChar(200)
+  date               String?  @db.VarChar(200)
+  device             String?  @db.VarChar(200)
+  total_balance      Float?
+  withdrawable_limit Float?
+  locked_amount      Float?
+  a                  Float?
+  b                  Float?
+  name               String?  @db.VarChar(200)
+  network            String?  @db.VarChar(200)
+  timestamp          DateTime @default(now()) @db.Timestamp(6)
+}
+
+model azer_hash {
+  hash_id    Int      @id @default(autoincrement())
+  hash       String?  @db.VarChar(200)
+  token      String?  @db.VarChar(200)
+  created_at String?  @db.VarChar(200)
+  trackcode  String?  @db.VarChar(200)
+  date       DateTime @default(now()) @db.Timestamp(6)
+  device     String?  @db.VarChar(200)
+}
+
+model azer_ltc_wallet {
+  wallet_id          Int      @id @default(autoincrement())
+  wallet_address     String?  @db.VarChar(200)
+  user_api_key       String?  @db.VarChar(200)
+  client_secret_key  String?  @db.VarChar(200)
+  hash               String?  @db.VarChar(200)
+  created_at         String?  @db.VarChar(200)
+  trackcode          String?  @db.VarChar(200)
+  seed               String?  @db.VarChar(200)
+  date               String?  @db.VarChar(200)
+  device             String?  @db.VarChar(200)
+  total_balance      Float?
+  withdrawable_limit Float?
+  locked_amount      Float?
+  a                  Float?
+  b                  Float?
+  name               String?  @db.VarChar(200)
+  network            String?  @db.VarChar(200)
+  timestamp          DateTime @default(now()) @db.Timestamp(6)
+}
+
+model azer_password_recovery {
+  pr_id      Int      @id @default(autoincrement())
+  useremail  String?  @db.VarChar(200)
+  token      String?  @db.VarChar(200)
+  hash       String?  @db.VarChar(200)
+  created_at String?  @db.VarChar(200)
+  expire_at  String?  @db.VarChar(200)
+  device     String?  @db.VarChar(200)
+  track_code String?  @db.VarChar(200)
+  date       DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([expire_at], map: "idx_azer_password_recovery_expire_at")
+  @@index([hash], map: "idx_azer_password_recovery_hash")
+  @@index([token], map: "idx_azer_password_recovery_token")
+  @@index([track_code], map: "idx_azer_password_recovery_track_code")
+  @@index([useremail], map: "idx_azer_password_recovery_useremail")
+}
+
+model azer_pol_wallet {
+  wallet_id          Int      @id @default(autoincrement())
+  wallet_address     String?  @db.VarChar(200)
+  user_api_key       String?  @db.VarChar(200)
+  client_secret_key  String?  @db.VarChar(200)
+  hash               String?  @db.VarChar(200)
+  created_at         String?  @db.VarChar(200)
+  trackcode          String?  @db.VarChar(200)
+  seed               String?  @db.VarChar(200)
+  date               String?  @db.VarChar(200)
+  device             String?  @db.VarChar(200)
+  total_balance      Float?
+  withdrawable_limit Float?
+  locked_amount      Float?
+  a                  Float?
+  b                  Float?
+  name               String?  @db.VarChar(200)
+  network            String?  @db.VarChar(200)
+  timestamp          DateTime @default(now()) @db.Timestamp(6)
+}
+
+model azer_sol_wallet {
+  wallet_id          Int      @id @default(autoincrement())
+  wallet_address     String?  @db.VarChar(200)
+  user_api_key       String?  @db.VarChar(200)
+  client_secret_key  String?  @db.VarChar(200)
+  hash               String?  @db.VarChar(200)
+  created_at         String?  @db.VarChar(200)
+  trackcode          String?  @db.VarChar(200)
+  seed               String?  @db.VarChar(200)
+  date               String?  @db.VarChar(200)
+  device             String?  @db.VarChar(200)
+  total_balance      Float?
+  withdrawable_limit Float?
+  locked_amount      Float?
+  a                  Float?
+  b                  Float?
+  name               String?  @db.VarChar(200)
+  network            String?  @db.VarChar(200)
+  timestamp          DateTime @default(now()) @db.Timestamp(6)
+}
+
+model azer_trx_wallet {
+  wallet_id          Int      @id @default(autoincrement())
+  wallet_address     String?  @db.VarChar(200)
+  user_api_key       String?  @db.VarChar(200)
+  client_secret_key  String?  @db.VarChar(200)
+  hash               String?  @db.VarChar(200)
+  created_at         String?  @db.VarChar(200)
+  trackcode          String?  @db.VarChar(200)
+  seed               String?  @db.VarChar(200)
+  date               String?  @db.VarChar(200)
+  device             String?  @db.VarChar(200)
+  total_balance      Float?
+  withdrawable_limit Float?
+  locked_amount      Float?
+  a                  Float?
+  b                  Float?
+  name               String?  @db.VarChar(200)
+  network            String?  @db.VarChar(200)
+  timestamp          DateTime @default(now()) @db.Timestamp(6)
+}
+
+model azer_usdc_wallet {
+  wallet_id          Int      @id @default(autoincrement())
+  wallet_address     String?  @db.VarChar(200)
+  user_api_key       String?  @db.VarChar(200)
+  client_secret_key  String?  @db.VarChar(200)
+  hash               String?  @db.VarChar(200)
+  created_at         String?  @db.VarChar(200)
+  trackcode          String?  @db.VarChar(200)
+  seed               String?  @db.VarChar(200)
+  date               String?  @db.VarChar(200)
+  device             String?  @db.VarChar(200)
+  total_balance      Float?
+  withdrawable_limit Float?
+  locked_amount      Float?
+  a                  Float?
+  b                  Float?
+  name               String?  @db.VarChar(200)
+  network            String?  @db.VarChar(200)
+  timestamp          DateTime @default(now()) @db.Timestamp(6)
+}
+
+model azer_usdt_wallet {
+  wallet_id          Int      @id @default(autoincrement())
+  wallet_address     String?  @db.VarChar(200)
+  user_api_key       String?  @db.VarChar(200)
+  client_secret_key  String?  @db.VarChar(200)
+  hash               String?  @db.VarChar(200)
+  created_at         String?  @db.VarChar(200)
+  trackcode          String?  @db.VarChar(200)
+  seed               String?  @db.VarChar(200)
+  date               String?  @db.VarChar(200)
+  device             String?  @db.VarChar(200)
+  total_balance      Float?
+  withdrawable_limit Float?
+  locked_amount      Float?
+  a                  Float?
+  b                  Float?
+  name               String?  @db.VarChar(200)
+  network            String?  @db.VarChar(200)
+  timestamp          DateTime @default(now()) @db.Timestamp(6)
+}
+
+model bank_account {
+  bank_id           Int      @id @default(autoincrement())
+  user_api_key      String?  @db.VarChar(200)
+  keychain          String?  @db.VarChar(200)
+  country           String?  @db.VarChar(200)
+  currency_iso3     String?  @db.VarChar(200)
+  bank_name         String?  @db.VarChar(200)
+  bank_account      String?  @db.VarChar(200)
+  bank_account_name String?  @db.VarChar(200)
+  set_default       Int      @default(0)
+  timestamp         DateTime @default(now()) @db.Timestamp(6)
+}
+
+model bank_list {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(255)
+  slug      String   @db.VarChar(255)
+  code      String   @db.VarChar(10)
+  country   String   @db.VarChar(255)
+  currency  String   @db.VarChar(50)
+  timestamp DateTime @default(now()) @db.Timestamp(6)
+}
+
+model coin_network {
+  net_id            Int      @id @default(autoincrement())
+  symbol            String?  @db.VarChar(200)
+  network_full_name String?  @db.VarChar(200)
+  network_id        String?  @db.VarChar(200)
+  network_type      String?  @db.VarChar(200)
+  network_logo      String?  @db.VarChar(200)
+  keychain          String?  @db.VarChar(200)
+  timestamp         DateTime @default(now()) @db.Timestamp(6)
+}
+
+model currency {
+  currency_id       Int      @id @default(autoincrement())
+  currency_name     String?  @db.VarChar(200)
+  country_code_iso2 String?  @db.VarChar(200)
+  currency_init     String?  @db.VarChar(200)
+  country           String?  @db.VarChar(200)
+  image             String?  @db.VarChar(200)
+  selling_rate      String?  @db.VarChar(200)
+  market_rate       String?  @db.VarChar(200)
+  buying_rate       String?  @db.VarChar(200)
+  currency_sign     String?  @db.VarChar(200)
+  creator_user_id   Int?
+  key_chain         String?  @db.VarChar(200)
+  timestamp         DateTime @default(now()) @db.Timestamp(6)
+  flag              String?  @db.VarChar(200)
+  flag_emoji        String?  @db.VarChar(200)
+  flag_emojiu       String?  @db.VarChar(200)
+}
+
+model email_oauth {
+  oauth_id   Int      @id @default(autoincrement())
+  oauthcode  String?  @db.VarChar(200)
+  created_at String?  @db.VarChar(200)
+  expire_at  String?  @db.VarChar(200)
+  useremail  String?  @db.VarChar(200)
+  date       DateTime @default(now()) @db.Timestamp(6)
+  keychain   String?  @db.VarChar(200)
+  hash       String?  @db.VarChar(200)
+  device     String?  @db.VarChar(200)
+  verified   Boolean? @default(false)
+
+  @@index([oauthcode], map: "idx_email_oauth_oauthcode")
+  @@index([useremail], map: "idx_email_oauth_useremail")
+  @@index([useremail, oauthcode, verified], map: "idx_email_oauth_verification")
+  @@index([useremail, verified], map: "idx_email_oauth_verified")
+}
+
+model merchants {
+  m_id                 Int                   @id @default(autoincrement())
+  user_api_key         String                @unique @db.VarChar(255)
+  user_name            String                @db.VarChar(100)
+  email                String                @unique @db.VarChar(255)
+  phone                String?               @db.VarChar(20)
+  bank_name            String                @db.VarChar(100)
+  bank_account_name    String                @db.VarChar(150)
+  bank_account_number  String                @db.VarChar(50)
+  bank_code            String?               @db.VarChar(20)
+  verification_status  String?               @default("pending") @db.VarChar(20)
+  verification_date    BigInt?
+  verified_by_admin    String?               @db.VarChar(255)
+  verification_notes   String?
+  total_order          Int?                  @default(0)
+  completed_order      Int?                  @default(0)
+  pending_order        Int?                  @default(0)
+  is_active            Boolean?              @default(true)
+  keychain             String                @unique @db.VarChar(8)
+  ip_address           String?               @db.VarChar(45)
+  device               String?
+  created_at           BigInt
+  updated_at           BigInt?
+  created_at_timestamp DateTime?             @default(now()) @db.Timestamp(6)
+  transaction_history  transaction_history[]
+
+  @@index([is_active, verification_status, created_at(sort: Desc)], map: "idx_merchants_active_verified")
+  @@index([created_at(sort: Desc)], map: "idx_merchants_created_at")
+  @@index([email], map: "idx_merchants_email")
+  @@index([is_active], map: "idx_merchants_is_active")
+  @@index([keychain], map: "idx_merchants_keychain")
+  @@index([user_api_key], map: "idx_merchants_user_api_key")
+  @@index([verification_status], map: "idx_merchants_verification_status")
+}
+
+model otp_verifications {
+  id                   Int       @id @default(autoincrement())
+  email                String    @db.VarChar(255)
+  otp_code             String    @db.VarChar(6)
+  purpose              String    @db.VarChar(50)
+  auth_hash            String?   @unique @db.VarChar(100)
+  verified             Boolean?  @default(false)
+  created_at           BigInt
+  expires_at           BigInt
+  hash_expires_at      BigInt?
+  device               String?
+  used                 Boolean?  @default(false)
+  created_at_timestamp DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([auth_hash], map: "idx_otp_auth_hash")
+  @@index([email, purpose], map: "idx_otp_email_purpose")
+  @@index([email, verified], map: "idx_otp_email_verified")
+  @@index([expires_at], map: "idx_otp_expires_at")
+  @@index([email, otp_code, purpose, verified], map: "idx_otp_lookup")
+}
+
+model otp_verify {
+  oauth_id    Int      @id @default(autoincrement())
+  oauthcode   String?  @db.VarChar(200)
+  created_at  String?  @db.VarChar(200)
+  created_for String?  @db.VarChar(200)
+  expire_at   String?  @db.VarChar(200)
+  useremail   String?  @db.VarChar(200)
+  date        DateTime @default(now()) @db.Timestamp(6)
+  keychain    String?  @db.VarChar(200)
+  hash        String?  @db.VarChar(200)
+  device      String?  @db.VarChar(200)
+
+  @@index([created_for], map: "idx_otp_verify_created_for")
+  @@index([expire_at], map: "idx_otp_verify_expire_at")
+  @@index([hash], map: "idx_otp_verify_hash")
+  @@index([keychain], map: "idx_otp_verify_keychain")
+  @@index([oauthcode], map: "idx_otp_verify_oauthcode")
+  @@index([useremail], map: "idx_otp_verify_useremail")
+}
+
+model pin_auth {
+  pin_auth_id   Int      @id @default(autoincrement())
+  user_api_key  String?  @db.VarChar(200)
+  pin_auth_hash String?  @db.VarChar(200)
+  keychain      String?  @db.VarChar(200)
+  token         String?  @db.VarChar(200)
+  device        String?  @db.VarChar(200)
+  timestamp     DateTime @default(now()) @db.Timestamp(6)
+}
+
+model recipients {
+  recipient_id         Int       @id @default(autoincrement())
+  user_api_key         String    @db.VarChar(255)
+  name                 String    @db.VarChar(100)
+  network              String    @db.VarChar(50)
+  asset                String    @db.VarChar(20)
+  wallet_address       String    @db.VarChar(255)
+  keychain             String    @unique @db.VarChar(8)
+  ip_address           String?   @db.VarChar(45)
+  device               String?
+  created_at           BigInt
+  updated_at           BigInt?
+  created_at_timestamp DateTime? @default(now()) @db.Timestamp(6)
+
+  @@unique([user_api_key, wallet_address, network, asset], map: "unique_user_recipient")
+  @@index([keychain], map: "idx_recipients_keychain")
+  @@index([user_api_key, created_at(sort: Desc)], map: "idx_recipients_user_api_key")
+}
+
+model send_coin_user {
+  azer_id             Int       @id @default(autoincrement())
+  first_name          String?
+  last_name           String?
+  user_email          String?   @unique
+  password            String?
+  verify_user         Boolean?
+  live_secret_key     String?
+  live_public_key     String?
+  test_public_key     String?
+  test_webhook_key    String?
+  api_key             String?
+  device              String?
+  ip_addr             String?
+  logincount          String    @default("0") @db.VarChar(200)
+  profession          String?
+  offeredsolution     String?   @db.VarChar(200)
+  solutiontype        String?   @db.VarChar(200)
+  country             String?
+  location            String?
+  phone               String?
+  device_security     String    @default("off") @db.VarChar(11)
+  vibrate             String    @default("off") @db.VarChar(11)
+  sound               String    @default("off") @db.VarChar(11)
+  activity_notify     String?   @default("off") @db.VarChar(11)
+  default_currency    String?   @default("usd") @db.VarChar(200)
+  address             String?
+  linkedin            String?
+  facebook            String?
+  twitter             String?
+  instagram           String?
+  github              String?
+  profile_pix         String?
+  webite              String?
+  company_logo        String?
+  company_name        String?
+  company_verify      String    @default("0") @db.VarChar(200)
+  country_iso2        String?   @db.VarChar(200)
+  account_ban         String    @default("false") @db.VarChar(200)
+  timestamp           DateTime  @default(now()) @db.Timestamp(6)
+  referal_id          String?   @db.VarChar(200)
+  referee             String?   @db.VarChar(200)
+  google_id           String?   @db.VarChar(255)
+  oauth_provider      String?   @db.VarChar(50)
+  apple_id            String?   @unique @db.VarChar(255)
+  apple_verified      Boolean?  @default(false)
+  is_private_email    Boolean?  @default(false)
+  auth_provider       String?   @default("email") @db.VarChar(50)
+  last_login_ip       String?   @db.VarChar(45)
+  last_login_location String?   @db.VarChar(255)
+  last_login_at       DateTime? @db.Timestamp(6)
+
+  @@index([apple_id], map: "idx_apple_id")
+  @@index([google_id], map: "idx_google_id")
+  @@index([user_email, last_login_ip], map: "idx_send_coin_user_email_ip")
+  @@index([last_login_ip], map: "idx_send_coin_user_last_login_ip")
+}
+
+model survey_config {
+  config_id             Int                     @id @default(autoincrement())
+  survey_title          String                  @db.VarChar(255)
+  survey_description    String?
+  is_active             Boolean                 @default(false)
+  show_on_signup        Boolean                 @default(true)
+  is_required           Boolean                 @default(false)
+  created_at            DateTime                @default(now()) @db.Timestamp(6)
+  updated_at            DateTime                @default(now()) @db.Timestamp(6)
+  created_by            Int?
+  survey_questions      survey_questions[]
+  survey_sessions       survey_sessions[]
+  user_survey_responses user_survey_responses[]
+
+  @@index([is_active, show_on_signup], map: "idx_survey_config_active")
+}
+
+model survey_questions {
+  question_id           Int                     @id @default(autoincrement())
+  config_id             Int
+  question_text         String
+  question_type         String                  @default("text") @db.VarChar(50)
+  question_options      String?
+  is_required           Boolean                 @default(false)
+  question_order        Int                     @default(0)
+  is_active             Boolean                 @default(true)
+  created_at            DateTime                @default(now()) @db.Timestamp(6)
+  survey_config         survey_config           @relation(fields: [config_id], references: [config_id], onDelete: Cascade, onUpdate: NoAction)
+  user_survey_responses user_survey_responses[]
+
+  @@index([config_id, question_order], map: "idx_survey_questions_config")
+}
+
+model survey_sessions {
+  session_id    Int           @id @default(autoincrement())
+  user_email    String        @db.VarChar(255)
+  azer_id       Int?
+  config_id     Int
+  is_completed  Boolean       @default(false)
+  started_at    DateTime      @default(now()) @db.Timestamp(6)
+  completed_at  DateTime?     @db.Timestamp(6)
+  ip_address    String?       @db.Inet
+  survey_config survey_config @relation(fields: [config_id], references: [config_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([is_completed], map: "idx_survey_sessions_completed")
+  @@index([user_email], map: "idx_survey_sessions_email")
+}
+
+model transaction_history {
+  history_id                Int        @id @default(autoincrement())
+  user_api_key              String     @db.VarChar(255)
+  merchant_keychain         String?    @db.VarChar(8)
+  reference                 String     @unique @db.VarChar(36)
+  keychain                  String     @unique @db.VarChar(16)
+  asset_type                String     @db.VarChar(10)
+  option_type               String     @db.VarChar(10)
+  transaction_type          String     @db.VarChar(10)
+  crypto_sign               String?    @db.VarChar(10)
+  crypto_amount             Decimal?   @db.Decimal(20, 8)
+  crypto_unit               Decimal?   @db.Decimal(20, 8)
+  network                   String?    @db.VarChar(50)
+  currency_sign             String?    @db.VarChar(10)
+  currency_amount           Decimal?   @db.Decimal(20, 2)
+  exchange_rate             Decimal?   @db.Decimal(20, 4)
+  buying_rate               Decimal?   @db.Decimal(20, 4)
+  selling_rate              Decimal?   @db.Decimal(20, 4)
+  payment_method            String?    @db.VarChar(30)
+  status                    String?    @default("pending") @db.VarChar(20)
+  status_updated_by         String?    @db.VarChar(255)
+  status_updated_at         BigInt?
+  status_notes              String?
+  payment_proof_url         String?
+  payment_proof_uploaded_at BigInt?
+  merchant_bank_name        String?    @db.VarChar(100)
+  merchant_bank_account     String?    @db.VarChar(50)
+  merchant_account_name     String?    @db.VarChar(150)
+  ip_address                String?    @db.VarChar(45)
+  device                    String?
+  location                  String?    @db.VarChar(255)
+  created_at                BigInt
+  updated_at                BigInt?
+  created_at_timestamp      DateTime?  @default(now()) @db.Timestamp(6)
+  merchants                 merchants? @relation(fields: [merchant_keychain], references: [keychain], map: "fk_merchant_keychain")
+
+  @@index([asset_type], map: "idx_transactions_asset_type")
+  @@index([created_at(sort: Desc)], map: "idx_transactions_created_at")
+  @@index([crypto_sign], map: "idx_transactions_crypto_sign")
+  @@index([user_api_key, asset_type, option_type, status, created_at(sort: Desc)], map: "idx_transactions_filters")
+  @@index([keychain], map: "idx_transactions_keychain")
+  @@index([merchant_keychain], map: "idx_transactions_merchant_keychain")
+  @@index([merchant_keychain, status, created_at(sort: Desc)], map: "idx_transactions_merchant_status")
+  @@index([option_type], map: "idx_transactions_option_type")
+  @@index([reference], map: "idx_transactions_reference")
+  @@index([status], map: "idx_transactions_status")
+  @@index([user_api_key], map: "idx_transactions_user_api_key")
+  @@index([user_api_key, asset_type, crypto_sign, created_at(sort: Desc)], map: "idx_transactions_user_asset")
+  @@index([user_api_key, status, created_at(sort: Desc)], map: "idx_transactions_user_status")
+}
+
+model user_notifications {
+  notification_id      Int       @id @default(autoincrement())
+  user_api_key         String    @db.VarChar(255)
+  user_email           String    @db.VarChar(255)
+  notification_type    String    @db.VarChar(50)
+  category             String    @db.VarChar(30)
+  priority             String?   @default("normal") @db.VarChar(20)
+  title                String    @db.VarChar(200)
+  message              String
+  metadata             Json?     @default("{}")
+  is_read              Boolean?  @default(false)
+  read_at              BigInt?
+  created_at           BigInt
+  created_at_timestamp DateTime? @default(now()) @db.Timestamp(6)
+  ip_address           String?   @db.VarChar(45)
+  device               String?
+  location             String?   @db.VarChar(255)
+  archived             Boolean?  @default(false)
+  archived_at          BigInt?
+
+  @@index([user_api_key, archived, created_at(sort: Desc)], map: "idx_notifications_archived")
+  @@index([created_at(sort: Desc)], map: "idx_notifications_created_at")
+  @@index([metadata], map: "idx_notifications_metadata", type: Gin)
+  @@index([notification_type], map: "idx_notifications_type")
+  @@index([user_api_key, category, created_at(sort: Desc)], map: "idx_notifications_user_category")
+  @@index([user_api_key, is_read, archived, created_at(sort: Desc)], map: "idx_notifications_user_status")
+  @@index([user_api_key, is_read, created_at(sort: Desc)], map: "idx_notifications_user_unread")
+}
+
+model user_survey_responses {
+  response_id      Int              @id @default(autoincrement())
+  user_email       String           @db.VarChar(255)
+  azer_id          Int?
+  config_id        Int
+  question_id      Int
+  answer_text      String?
+  answer_numeric   Decimal?         @db.Decimal(10, 2)
+  answer_boolean   Boolean?
+  answer_date      DateTime?        @db.Timestamp(6)
+  submitted_at     DateTime         @default(now()) @db.Timestamp(6)
+  ip_address       String?          @db.Inet
+  user_agent       String?
+  survey_config    survey_config    @relation(fields: [config_id], references: [config_id], onDelete: Cascade, onUpdate: NoAction)
+  survey_questions survey_questions @relation(fields: [question_id], references: [question_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([config_id], map: "idx_user_responses_config")
+  @@index([user_email], map: "idx_user_responses_email")
+}
+
+model wallet_transfers {
+  transfer_id              Int       @id @default(autoincrement())
+  reference                String    @unique @db.VarChar(36)
+  user_api_key             String    @db.VarChar(255)
+  recipient_keychain       String?   @db.VarChar(8)
+  recipient_name           String?   @db.VarChar(120)
+  recipient_wallet_address String    @db.VarChar(255)
+  asset                    String    @db.VarChar(20)
+  network                  String    @db.VarChar(50)
+  amount                   Decimal   @db.Decimal(28, 8)
+  fee                      Decimal?  @db.Decimal(28, 8)
+  status                   String?   @default("pending") @db.VarChar(20)
+  tx_hash                  String?   @db.VarChar(120)
+  note                     String?
+  metadata                 Json?
+  ip_address               String?   @db.VarChar(45)
+  device                   String?
+  created_at               BigInt
+  updated_at               BigInt?
+  created_at_timestamp     DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([reference], map: "idx_wallet_transfers_reference")
+  @@index([status], map: "idx_wallet_transfers_status")
+  @@index([user_api_key, created_at(sort: Desc)], map: "idx_wallet_transfers_user")
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  COMPLIANCE
+  ENGINEER
+  TEST
+}
+
+enum AdminStatus {
+  ACTIVE
+  INACTIVE
+}
+
+
+// *** WARNING ***
+// 
+// These constraints are not supported by Prisma Client, because Prisma currently does not fully support check constraints. Read more: https://pris.ly/d/check-constraints
+//   - Model: "merchants", constraint: "merchants_verification_status_check"
+//   - Model: "merchants", constraint: "valid_bank_account"
+//   - Model: "merchants", constraint: "valid_keychain"
+//   - Model: "recipients", constraint: "valid_keychain"
+//   - Model: "transaction_history", constraint: "transaction_history_asset_type_check"
+//   - Model: "transaction_history", constraint: "transaction_history_option_type_check"
+//   - Model: "transaction_history", constraint: "transaction_history_payment_method_check"
+//   - Model: "transaction_history", constraint: "transaction_history_status_check"
+//   - Model: "transaction_history", constraint: "transaction_history_transaction_type_check"
+//   - Model: "transaction_history", constraint: "valid_reference"
+//   - Model: "transaction_history", constraint: "valid_transaction_keychain"
+//   - Model: "wallet_transfers", constraint: "wallet_transfers_amount_check"
+//   - Model: "wallet_transfers", constraint: "wallet_transfers_status_check"
+// 
+// These objects have comments defined in the database, which is not yet fully supported. Read more: https://pris.ly/d/database-comments
+//   - Type: "model", name: "merchants"
+//   - Type: "field", name: "merchants.m_id"
+//   - Type: "field", name: "merchants.user_api_key"
+//   - Type: "field", name: "merchants.verification_status"
+//   - Type: "field", name: "merchants.total_order"
+//   - Type: "field", name: "merchants.completed_order"
+//   - Type: "field", name: "merchants.pending_order"
+//   - Type: "field", name: "merchants.is_active"
+//   - Type: "field", name: "merchants.keychain"
+//   - Type: "model", name: "transaction_history"
+//   - Type: "field", name: "transaction_history.history_id"
+//   - Type: "field", name: "transaction_history.reference"
+//   - Type: "field", name: "transaction_history.keychain"
+//   - Type: "field", name: "transaction_history.option_type"
+//   - Type: "field", name: "transaction_history.exchange_rate"
+//   - Type: "field", name: "transaction_history.payment_method"
+//   - Type: "field", name: "transaction_history.status"
+//   - Type: "field", name: "transaction_history.status_updated_by"
+//   - Type: "model", name: "user_notifications"
+//   - Type: "field", name: "user_notifications.notification_id"
+//   - Type: "field", name: "user_notifications.user_api_key"
+//   - Type: "field", name: "user_notifications.notification_type"
+//   - Type: "field", name: "user_notifications.category"
+//   - Type: "field", name: "user_notifications.priority"
+//   - Type: "field", name: "user_notifications.metadata"
+//   - Type: "field", name: "user_notifications.is_read"
+//   - Type: "field", name: "user_notifications.read_at"
+//   - Type: "field", name: "user_notifications.created_at"
+//   - Type: "field", name: "user_notifications.archived"
+// 
+

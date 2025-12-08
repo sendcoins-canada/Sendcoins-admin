@@ -1,12 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
 import { MailService } from '../mail/mail.service';
-import { AdminStatus } from '@prisma/client';
+import { AdminStatus, RoleStatus, Prisma } from '@prisma/client';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
+import type { StringValue } from 'ms';
 import { AdminAuditService } from './admin-audit.service';
-import { ConflictException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+
+// Type for admin user with department relation
+type AdminWithDepartment = Prisma.AdminUserGetPayload<{
+  include: { department: true };
+}>;
 
 @Injectable()
 export class AdminUsersService {
@@ -18,19 +26,50 @@ export class AdminUsersService {
   ) {}
 
   async createAdmin(dto: CreateAdminUserDto) {
-    let admin;
+    // If roleId is provided, verify it exists and is ACTIVE
+    if (dto.roleId) {
+      const role = await this.prisma.client.role.findUnique({
+        where: { id: dto.roleId },
+      });
+      if (!role) {
+        throw new BadRequestException(`Role with ID ${dto.roleId} not found`);
+      }
+      if (role.status !== RoleStatus.ACTIVE) {
+        throw new BadRequestException(
+          `Cannot assign inactive role. The role "${role.title}" is ${role.status}. Only ACTIVE roles can be assigned to admin users.`,
+        );
+      }
+    }
+
+    // If departmentId is provided, verify it exists
+    if (dto.departmentId) {
+      const department = await this.prisma.client.department.findUnique({
+        where: { id: dto.departmentId },
+      });
+      if (!department) {
+        throw new BadRequestException(
+          `Department with ID ${dto.departmentId} not found`,
+        );
+      }
+    }
+
+    let admin: AdminWithDepartment;
     try {
       admin = await this.prisma.client.adminUser.create({
         data: {
           email: dto.email.toLowerCase(),
           firstName: dto.firstName,
           lastName: dto.lastName,
-          department: dto.department,
-          role: dto.role,
+          departmentId: dto.departmentId,
+          role: dto.role, // Legacy role enum
+          roleId: dto.roleId, // Dynamic role (takes precedence)
           status: AdminStatus.ACTIVE,
           // placeholder password until they set one
           password: 'TEMP_PASSWORD_PLACEHOLDER',
           passwordSet: false,
+        },
+        include: {
+          department: true,
         },
       });
     } catch (err) {
@@ -50,8 +89,9 @@ export class AdminUsersService {
       type: 'admin' as const,
     };
     const options: JwtSignOptions = {
-      // cast to any to satisfy typings; jsonwebtoken accepts string or number
-      expiresIn: (process.env.ADMIN_PASSWORD_SETUP_TTL ?? '24h') as any,
+      expiresIn: (process.env.ADMIN_PASSWORD_SETUP_TTL ?? '24h') as
+        | number
+        | StringValue,
     };
     const token = await this.jwtService.signAsync(payload, options);
 
@@ -61,19 +101,47 @@ export class AdminUsersService {
       admin.firstName,
     );
 
+    // Fetch role info if roleId was assigned
+    let roleInfo: { id: number; title: string; status: string } | null = null;
+    if (admin.roleId) {
+      const role = await this.prisma.client.role.findUnique({
+        where: { id: admin.roleId },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+        },
+      });
+      if (role) {
+        roleInfo = role;
+      }
+    }
+
     await this.audit.log('ADMIN_CREATED', admin.id, undefined, {
       email: admin.email,
       role: admin.role,
-      department: admin.department,
+      roleId: admin.roleId,
+      departmentId: admin.departmentId,
     });
+
+    const department = admin.department;
 
     return {
       id: admin.id,
       email: admin.email,
       firstName: admin.firstName,
       lastName: admin.lastName,
-      department: admin.department,
-      role: admin.role,
+      departmentId: admin.departmentId,
+      department: department
+        ? {
+            id: department.id,
+            name: department.name,
+            description: department.description,
+          }
+        : null,
+      role: admin.role, // Legacy role enum (for backward compatibility)
+      roleId: admin.roleId || null, // Dynamic role ID
+      dynamicRole: roleInfo, // Dynamic role details if assigned
       status: admin.status,
       createdAt: admin.createdAt,
     };
@@ -95,7 +163,9 @@ export class AdminUsersService {
       type: 'admin' as const,
     };
     const options: JwtSignOptions = {
-      expiresIn: (process.env.ADMIN_PASSWORD_SETUP_TTL ?? '24h') as any,
+      expiresIn: (process.env.ADMIN_PASSWORD_SETUP_TTL ?? '24h') as
+        | number
+        | StringValue,
     };
     const token = await this.jwtService.signAsync(payload, options);
 

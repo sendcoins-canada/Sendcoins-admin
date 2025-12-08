@@ -5,7 +5,11 @@ import { AuthGuard } from '@nestjs/passport';
 // Endpoints that are allowed without JWT (public)
 const PUBLIC_PATHS: { method: string; pathPrefix: string }[] = [
   { method: 'GET', pathPrefix: '/health' },
+  { method: 'GET', pathPrefix: '/permissions' }, // Public - just lists available permissions
   { method: 'POST', pathPrefix: '/auth/admin/login' },
+  { method: 'POST', pathPrefix: '/auth/admin/verify-mfa' },
+  { method: 'POST', pathPrefix: '/auth/admin/refresh' }, // Uses refresh token, not JWT
+  { method: 'POST', pathPrefix: '/auth/admin/logout' }, // Uses refresh token, not JWT
   { method: 'POST', pathPrefix: '/auth/admin/forgot-password' },
   { method: 'POST', pathPrefix: '/auth/admin/set-password' },
   { method: 'POST', pathPrefix: '/auth/admin/validate-password-token' },
@@ -32,6 +36,6 @@ export class GlobalAuthGuard extends AuthGuard('jwt') implements CanActivate {
       return true;
     }
 
-    return super.canActivate(context) as any;
+    return super.canActivate(context) as Promise<boolean> | boolean;
   }
 }

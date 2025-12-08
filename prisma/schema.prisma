@@ -7,41 +7,96 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum AdminRole {
-  SUPER_ADMIN
-  COMPLIANCE
-  ENGINEER
-  TEST
+model AdminAuditLog {
+  id        Int      @id @default(autoincrement())
+  adminId   Int?
+  actorId   Int?
+  action    String   @db.VarChar(100)
+  detail    Json?
+  ipAddress String?  @db.VarChar(45)
+  userAgent String?  @db.VarChar(500)
+  createdAt DateTime @default(now()) @db.Timestamp(6)
 }
 
-enum AdminStatus {
-  ACTIVE
-  INACTIVE
+model AdminRefreshToken {
+  id          Int       @id @default(autoincrement())
+  adminId     Int
+  token       String    @unique @db.VarChar(500)
+  expiresAt   DateTime  @db.Timestamp(6)
+  isRevoked   Boolean   @default(false)
+  deviceInfo  String?   @db.VarChar(500)
+  ipAddress   String?   @db.VarChar(45)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  admin       AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([token])
+  @@index([expiresAt])
 }
 
 model AdminUser {
-  id                  Int          @id @default(autoincrement())
-  email               String       @unique @db.VarChar(255)
-  firstName           String       @db.VarChar(100)
-  lastName            String       @db.VarChar(100)
-  profile             String?      @db.VarChar(255)
-  department          String?      @db.VarChar(100)
-  role                AdminRole    @default(ENGINEER)
-  status              AdminStatus  @default(ACTIVE)
-  password            String       @db.VarChar(255)
-  passwordSet         Boolean      @default(false)
-  lastPasswordChangeAt DateTime?   @db.Timestamp(6)
-  createdAt           DateTime     @default(now()) @db.Timestamp(6)
-  updatedAt           DateTime     @updatedAt @db.Timestamp(6)
+  id                  Int                  @id @default(autoincrement())
+  email               String               @unique @db.VarChar(255)
+  firstName           String               @db.VarChar(100)
+  lastName            String               @db.VarChar(100)
+  profile             String?              @db.VarChar(255)
+  departmentId        Int?
+  role                AdminRole            @default(ENGINEER)
+  roleId              Int?
+  status              AdminStatus          @default(ACTIVE)
+  password            String               @db.VarChar(255)
+  passwordSet         Boolean              @default(false)
+  lastPasswordChangeAt DateTime?           @db.Timestamp(6)
+  lastLoginAt         DateTime?            @db.Timestamp(6)
+  mfaEnabled          Boolean              @default(false)
+  mfaSecret           String?              @db.VarChar(255)
+  mfaBackupCodes      Json?
+  lastMfaAt           DateTime?            @db.Timestamp(6)
+  allowedIps          Json?
+  deletedAt           DateTime?            @db.Timestamp(6)
+  createdAt           DateTime             @default(now()) @db.Timestamp(6)
+  updatedAt           DateTime             @updatedAt @db.Timestamp(6)
+  department          Department?          @relation(fields: [departmentId], references: [id])
+  dynamicRole         Role?                @relation("AdminUserRole", fields: [roleId], references: [id])
+  rolesCreated        Role[]               @relation("RoleCreatedBy")
+  rolesLastUpdated    Role[]               @relation("RoleLastUpdatedBy")
+  refreshTokens       AdminRefreshToken[]
 }
 
-model AdminAuditLog {
-  id         Int      @id @default(autoincrement())
-  adminId    Int?
-  actorId    Int?
-  action     String   @db.VarChar(100)
-  detail     Json?
-  createdAt  DateTime @default(now()) @db.Timestamp(6)
+model Department {
+  id          Int         @id @default(autoincrement())
+  name        String      @unique @db.VarChar(100)
+  description String?     @db.VarChar(500)
+  createdAt   DateTime    @default(now()) @db.Timestamp(6)
+  updatedAt   DateTime    @updatedAt @db.Timestamp(6)
+  adminUsers  AdminUser[]
+}
+
+model Role {
+  id              Int              @id @default(autoincrement())
+  title           String           @db.VarChar(255)
+  description     String?
+  status          RoleStatus       @default(ACTIVE)
+  createdById     Int
+  lastUpdatedById Int?
+  createdAt       DateTime         @default(now()) @db.Timestamp(6)
+  updatedAt       DateTime         @updatedAt @db.Timestamp(6)
+  adminUsers      AdminUser[]      @relation("AdminUserRole")
+  createdBy       AdminUser        @relation("RoleCreatedBy", fields: [createdById], references: [id])
+  lastUpdatedBy   AdminUser?       @relation("RoleLastUpdatedBy", fields: [lastUpdatedById], references: [id])
+  permissions     RolePermission[]
+}
+
+model RolePermission {
+  id         Int        @id @default(autoincrement())
+  roleId     Int
+  permission Permission
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now()) @db.Timestamp(6)
+  Role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permission])
+  @@index([roleId])
 }
 
 model apple_user_names {
@@ -359,8 +414,6 @@ model email_oauth {
   @@index([useremail, verified], map: "idx_email_oauth_verified")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model merchants {
   m_id                 Int                   @id @default(autoincrement())
   user_api_key         String                @unique @db.VarChar(255)
@@ -447,7 +500,6 @@ model pin_auth {
   timestamp     DateTime @default(now()) @db.Timestamp(6)
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model recipients {
   recipient_id         Int       @id @default(autoincrement())
   user_api_key         String    @db.VarChar(255)
@@ -573,8 +625,6 @@ model survey_sessions {
   @@index([user_email], map: "idx_survey_sessions_email")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model transaction_history {
   history_id                Int        @id @default(autoincrement())
   user_api_key              String     @db.VarChar(255)
@@ -626,7 +676,6 @@ model transaction_history {
   @@index([user_api_key, status, created_at(sort: Desc)], map: "idx_transactions_user_status")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model user_notifications {
   notification_id      Int       @id @default(autoincrement())
   user_api_key         String    @db.VarChar(255)
@@ -676,7 +725,6 @@ model user_survey_responses {
   @@index([user_email], map: "idx_user_responses_email")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model wallet_transfers {
   transfer_id              Int       @id @default(autoincrement())
   reference                String    @unique @db.VarChar(36)
@@ -701,4 +749,40 @@ model wallet_transfers {
   @@index([reference], map: "idx_wallet_transfers_reference")
   @@index([status], map: "idx_wallet_transfers_status")
   @@index([user_api_key, created_at(sort: Desc)], map: "idx_wallet_transfers_user")
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  COMPLIANCE
+  ENGINEER
+  TEST
+}
+
+enum AdminStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum Permission {
+  READ_USERS
+  SUSPEND_USERS
+  READ_TRANSACTIONS
+  VERIFY_TRANSACTIONS
+  READ_TX_HASH
+  EXPORT_TRANSACTIONS
+  READ_WALLETS
+  FREEZE_WALLETS
+  READ_AUDIT_LOGS
+  VERIFY_KYC
+  MANAGE_ADMINS
+  MANAGE_ROLES
+  MANAGE_DEPARTMENTS
+  VIEW_DASHBOARD
+  VIEW_ANALYTICS
+  EXPORT_DATA
+}
+
+enum RoleStatus {
+  ACTIVE
+  INACTIVE
 }
