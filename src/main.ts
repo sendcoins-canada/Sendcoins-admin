@@ -65,8 +65,29 @@ async function bootstrap() {
     }),
   );
 
-  // Security headers
-  app.use(helmet());
+  // Security headers with CSP configured for Swagger UI CDN assets
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: [
+            "'self'",
+            "'unsafe-inline'", // Swagger UI may need inline styles
+            'https://cdnjs.cloudflare.com',
+          ],
+          scriptSrc: [
+            "'self'",
+            "'unsafe-inline'", // Swagger UI initialization script
+            'https://cdnjs.cloudflare.com',
+          ],
+          imgSrc: ["'self'", 'data:', 'https:'],
+          connectSrc: ["'self'"],
+          fontSrc: ["'self'", 'https:', 'data:'],
+        },
+      },
+    }),
+  );
 
   // CORS
   const corsOrigins = (
@@ -102,7 +123,23 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   
-  // Use CDN assets for serverless environments (Vercel) to avoid 404 errors
+  // Register redirect routes BEFORE Swagger setup so they take precedence
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+    const cdnBase = 'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.10.5';
+    const expressApp = app.getHttpAdapter().getInstance();
+    
+    // Redirect static asset requests to CDN (registered before Swagger, so they're matched first)
+    expressApp.get('/api/docs/swagger-ui.css', (req: any, res: any) => {
+      res.redirect(301, `${cdnBase}/swagger-ui.min.css`);
+    });
+    expressApp.get('/api/docs/swagger-ui-bundle.js', (req: any, res: any) => {
+      res.redirect(301, `${cdnBase}/swagger-ui-bundle.min.js`);
+    });
+    expressApp.get('/api/docs/swagger-ui-standalone-preset.js', (req: any, res: any) => {
+      res.redirect(301, `${cdnBase}/swagger-ui-standalone-preset.min.js`);
+    });
+  }
+  
   const swaggerOptions: any = {
     customSiteTitle: 'SendCoins Admin API Docs',
     customfavIcon: '/favicon.ico',
@@ -112,14 +149,14 @@ async function bootstrap() {
     },
   };
 
-  // Use CDN assets in production/serverless to avoid static asset serving issues
+  // Use CDN assets in production/serverless
   if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+    const cdnBase = 'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.10.5';
     swaggerOptions.customJs = [
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.10.5/swagger-ui-bundle.min.js',
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.10.5/swagger-ui-standalone-preset.min.js',
+      `${cdnBase}/swagger-ui-bundle.min.js`,
+      `${cdnBase}/swagger-ui-standalone-preset.min.js`,
     ];
-    swaggerOptions.customCssUrl =
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.10.5/swagger-ui.min.css';
+    swaggerOptions.customCssUrl = `${cdnBase}/swagger-ui.min.css`;
   }
 
   SwaggerModule.setup('api/docs', app, document, swaggerOptions);
