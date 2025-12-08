@@ -101,11 +101,28 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document, {
+  
+  // Use CDN assets for serverless environments (Vercel) to avoid 404 errors
+  const swaggerOptions: any = {
     customSiteTitle: 'SendCoins Admin API Docs',
     customfavIcon: '/favicon.ico',
     customCss: '.swagger-ui .topbar { display: none }',
-  });
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  };
+
+  // Use CDN assets in production/serverless to avoid static asset serving issues
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+    swaggerOptions.customJs = [
+      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.10.5/swagger-ui-bundle.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.10.5/swagger-ui-standalone-preset.min.js',
+    ];
+    swaggerOptions.customCssUrl =
+      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.10.5/swagger-ui.min.css';
+  }
+
+  SwaggerModule.setup('api/docs', app, document, swaggerOptions);
 
   const port = process.env.PORT || 4005;
   await app.listen(port);
