@@ -1,4 +1,10 @@
-import { IsArray, IsEnum, IsOptional, IsString, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsEnum,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { TransactionStatus } from './get-transactions.dto';
@@ -74,6 +80,3 @@ export class BulkFlagDto {
   @IsString()
   reason?: string;
 }
-
-
-

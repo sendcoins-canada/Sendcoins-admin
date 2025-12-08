@@ -13,34 +13,54 @@ model AdminAuditLog {
   actorId   Int?
   action    String   @db.VarChar(100)
   detail    Json?
+  ipAddress String?  @db.VarChar(45)
+  userAgent String?  @db.VarChar(500)
   createdAt DateTime @default(now()) @db.Timestamp(6)
 }
 
+model AdminRefreshToken {
+  id          Int       @id @default(autoincrement())
+  adminId     Int
+  token       String    @unique @db.VarChar(500)
+  expiresAt   DateTime  @db.Timestamp(6)
+  isRevoked   Boolean   @default(false)
+  deviceInfo  String?   @db.VarChar(500)
+  ipAddress   String?   @db.VarChar(45)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  admin       AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
 model AdminUser {
-  id                  Int          @id @default(autoincrement())
-  email               String       @unique @db.VarChar(255)
-  firstName           String       @db.VarChar(100)
-  lastName            String       @db.VarChar(100)
-  profile             String?      @db.VarChar(255)
+  id                  Int                  @id @default(autoincrement())
+  email               String               @unique @db.VarChar(255)
+  firstName           String               @db.VarChar(100)
+  lastName            String               @db.VarChar(100)
+  profile             String?              @db.VarChar(255)
   departmentId        Int?
-  role                AdminRole    @default(ENGINEER)
+  role                AdminRole            @default(ENGINEER)
   roleId              Int?
-  status              AdminStatus  @default(ACTIVE)
-  password            String       @db.VarChar(255)
-  passwordSet         Boolean      @default(false)
-  lastPasswordChangeAt DateTime?   @db.Timestamp(6)
-  lastLoginAt         DateTime?    @db.Timestamp(6)
-  mfaEnabled          Boolean      @default(false)
-  mfaSecret           String?      @db.VarChar(255)
+  status              AdminStatus          @default(ACTIVE)
+  password            String               @db.VarChar(255)
+  passwordSet         Boolean              @default(false)
+  lastPasswordChangeAt DateTime?           @db.Timestamp(6)
+  lastLoginAt         DateTime?            @db.Timestamp(6)
+  mfaEnabled          Boolean              @default(false)
+  mfaSecret           String?              @db.VarChar(255)
   mfaBackupCodes      Json?
-  lastMfaAt           DateTime?    @db.Timestamp(6)
+  lastMfaAt           DateTime?            @db.Timestamp(6)
   allowedIps          Json?
-  createdAt           DateTime     @default(now()) @db.Timestamp(6)
-  updatedAt           DateTime     @updatedAt @db.Timestamp(6)
-  department          Department?  @relation(fields: [departmentId], references: [id])
-  dynamicRole         Role?        @relation("AdminUserRole", fields: [roleId], references: [id])
-  rolesCreated        Role[]       @relation("RoleCreatedBy")
-  rolesLastUpdated    Role[]       @relation("RoleLastUpdatedBy")
+  deletedAt           DateTime?            @db.Timestamp(6)
+  createdAt           DateTime             @default(now()) @db.Timestamp(6)
+  updatedAt           DateTime             @updatedAt @db.Timestamp(6)
+  department          Department?          @relation(fields: [departmentId], references: [id])
+  dynamicRole         Role?                @relation("AdminUserRole", fields: [roleId], references: [id])
+  rolesCreated        Role[]               @relation("RoleCreatedBy")
+  rolesLastUpdated    Role[]               @relation("RoleLastUpdatedBy")
+  refreshTokens       AdminRefreshToken[]
 }
 
 model Department {
@@ -749,10 +769,17 @@ enum Permission {
   READ_TRANSACTIONS
   VERIFY_TRANSACTIONS
   READ_TX_HASH
+  EXPORT_TRANSACTIONS
   READ_WALLETS
   FREEZE_WALLETS
   READ_AUDIT_LOGS
   VERIFY_KYC
+  MANAGE_ADMINS
+  MANAGE_ROLES
+  MANAGE_DEPARTMENTS
+  VIEW_DASHBOARD
+  VIEW_ANALYTICS
+  EXPORT_DATA
 }
 
 enum RoleStatus {

@@ -20,6 +20,3 @@ export class FlagTransactionDto {
   @IsString()
   reason?: string;
 }
-
-
-

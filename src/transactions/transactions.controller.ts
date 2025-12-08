@@ -9,8 +9,10 @@ import {
   Body,
   UseGuards,
   Req,
+  Res,
   ParseIntPipe,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -20,7 +22,10 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 import { TransactionsService } from './transactions.service';
-import { GetTransactionsDto, TransactionType } from './dto/get-transactions.dto';
+import {
+  GetTransactionsDto,
+  TransactionType,
+} from './dto/get-transactions.dto';
 import { UpdateTransactionStatusDto } from './dto/update-transaction-status.dto';
 import { FlagTransactionDto } from './dto/flag-transaction.dto';
 import { BulkUpdateStatusDto, BulkFlagDto } from './dto/bulk-action.dto';
@@ -33,6 +38,11 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { RequirePermission } from '../auth/require-permission.decorator';
 import { Permission } from '../auth/permissions.enum';
+
+// Authenticated request type
+interface AuthenticatedRequest extends Request {
+  user: { sub: number; email: string; role: string };
+}
 
 @ApiTags('Transactions')
 @ApiBearerAuth()
@@ -149,7 +159,7 @@ export class TransactionsController {
   async updateStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTransactionStatusDto,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
   ): Promise<UnifiedTransactionResponseDto> {
     return this.transactionsService.updateStatus(id, dto, req.user.sub);
   }
@@ -174,7 +184,7 @@ export class TransactionsController {
   async flagTransaction(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: FlagTransactionDto,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
   ): Promise<UnifiedTransactionResponseDto> {
     return this.transactionsService.flagTransaction(id, dto, req.user.sub);
   }
@@ -231,8 +241,11 @@ export class TransactionsController {
   })
   async bulkUpdateStatus(
     @Body() dto: BulkUpdateStatusDto,
-    @Req() req: any,
-  ): Promise<{ updated: number; failed: Array<{ id: number; error: string }> }> {
+    @Req() req: AuthenticatedRequest,
+  ): Promise<{
+    updated: number;
+    failed: Array<{ id: number; error: string }>;
+  }> {
     return this.transactionsService.bulkUpdateStatus(dto, req.user.sub);
   }
 
@@ -264,16 +277,26 @@ export class TransactionsController {
   })
   async bulkFlag(
     @Body() dto: BulkFlagDto,
-    @Req() req: any,
-  ): Promise<{ flagged: number; failed: Array<{ id: number; error: string }> }> {
+    @Req() req: AuthenticatedRequest,
+  ): Promise<{
+    flagged: number;
+    failed: Array<{ id: number; error: string }>;
+  }> {
     return this.transactionsService.bulkFlag(dto, req.user.sub);
   }
 
   @Get('export')
-  @RequirePermission(Permission.READ_TRANSACTIONS)
+  @RequirePermission(Permission.EXPORT_TRANSACTIONS)
   @ApiOperation({
     summary: 'Export transactions',
-    description: 'Exports transactions to CSV/Excel format',
+    description:
+      'Exports transactions to CSV format with the same filters as the list endpoint',
+  })
+  @ApiQuery({
+    name: 'format',
+    enum: ['csv', 'json'],
+    required: false,
+    description: 'Export format (defaults to csv)',
   })
   @ApiResponse({
     status: 200,
@@ -281,13 +304,37 @@ export class TransactionsController {
     headers: {
       'Content-Type': { schema: { type: 'string', example: 'text/csv' } },
       'Content-Disposition': {
-        schema: { type: 'string', example: 'attachment; filename="transactions.csv"' },
+        schema: {
+          type: 'string',
+          example: 'attachment; filename="transactions.csv"',
+        },
       },
     },
   })
-  async exportTransactions(@Query() dto: GetTransactionsDto) {
-    // TODO: Implement CSV/Excel export
-    throw new Error('Export functionality not yet implemented');
+  async exportTransactions(
+    @Query() dto: GetTransactionsDto,
+    @Query('format') format: 'csv' | 'json' = 'csv',
+    @Res() res: Response,
+  ) {
+    const result = await this.transactionsService.exportTransactions(
+      dto,
+      format,
+    );
+
+    if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="transactions-${Date.now()}.json"`,
+      );
+      return res.send(JSON.stringify(result.data, null, 2));
+    }
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="transactions-${Date.now()}.csv"`,
+    );
+    return res.send(result.csv);
   }
 }
-

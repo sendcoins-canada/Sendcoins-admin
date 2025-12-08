@@ -11,11 +11,15 @@ import {
   ValidationError,
 } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
+import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 
 dotenv.config();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Global exception filter for consistent error responses
+  app.useGlobalFilters(new GlobalExceptionFilter());
 
   // Global validation with custom error formatting
   app.useGlobalPipes(

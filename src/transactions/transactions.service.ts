@@ -4,7 +4,12 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { GetTransactionsDto, TransactionType, TransactionStatus } from './dto/get-transactions.dto';
+import {
+  GetTransactionsDto,
+  TransactionType,
+  SortBy,
+  SortOrder,
+} from './dto/get-transactions.dto';
 import { UpdateTransactionStatusDto } from './dto/update-transaction-status.dto';
 import { FlagTransactionDto } from './dto/flag-transaction.dto';
 import { BulkUpdateStatusDto, BulkFlagDto } from './dto/bulk-action.dto';
@@ -13,6 +18,25 @@ import {
   TransactionStatsResponseDto,
   PaginatedTransactionsResponseDto,
 } from './dto/transaction-response.dto';
+import { Prisma } from '@prisma/client';
+
+// Types for transaction records
+type TransactionHistoryRecord = Prisma.transaction_historyGetPayload<{
+  include: { merchants: true };
+}>;
+
+type WalletTransferRecord = Prisma.wallet_transfersGetPayload<object>;
+
+// Filter types for better type safety
+interface TransactionFilter {
+  status?: string;
+  created_at?: { gte?: bigint; lte?: bigint };
+  OR?: Array<Record<string, unknown>>;
+  asset_type?: string;
+  asset?: string;
+  history_id?: number;
+  transfer_id?: number;
+}
 
 @Injectable()
 export class TransactionsService {
@@ -132,7 +156,9 @@ export class TransactionsService {
     // Get counts
     const [historyCount, transferCount] = await Promise.all([
       fetchHistory
-        ? this.prisma.client.transaction_history.count({ where: historyFilters })
+        ? this.prisma.client.transaction_history.count({
+            where: historyFilters,
+          })
         : Promise.resolve(0),
       fetchTransfers
         ? this.prisma.client.wallet_transfers.count({ where: transferFilters })
@@ -148,7 +174,7 @@ export class TransactionsService {
     // 2. Database views/union queries
     // 3. Separate endpoints for each transaction type
     const fetchLimit = Math.min(
-      limit + skip + (limit * 0.5), // Fetch extra to account for sorting
+      limit + skip + limit * 0.5, // Fetch extra to account for sorting
       Math.max(limit * 3, 500), // But cap at reasonable limit
     );
 
@@ -180,25 +206,31 @@ export class TransactionsService {
 
     // Sort unified transactions
     unifiedTransactions.sort((a, b) => {
-      if (dto.sortBy === 'amount') {
+      if (dto.sortBy === SortBy.AMOUNT) {
         const aAmount = a.amount.crypto || a.amount.fiat || 0;
         const bAmount = b.amount.crypto || b.amount.fiat || 0;
-        return dto.sortOrder === 'asc'
+        return dto.sortOrder === SortOrder.ASC
           ? aAmount - bAmount
           : bAmount - aAmount;
       }
 
-      if (dto.sortBy === 'status') {
-        const statusOrder = ['pending', 'processing', 'completed', 'failed', 'cancelled'];
+      if (dto.sortBy === SortBy.STATUS) {
+        const statusOrder = [
+          'pending',
+          'processing',
+          'completed',
+          'failed',
+          'cancelled',
+        ];
         const aIndex = statusOrder.indexOf(a.status) || 0;
         const bIndex = statusOrder.indexOf(b.status) || 0;
-        return dto.sortOrder === 'asc'
+        return dto.sortOrder === SortOrder.ASC
           ? aIndex - bIndex
           : bIndex - aIndex;
       }
 
       // Default: sort by created_at
-      if (dto.sortOrder === 'asc') {
+      if (dto.sortOrder === SortOrder.ASC) {
         return a.createdAt.getTime() - b.createdAt.getTime();
       }
       return b.createdAt.getTime() - a.createdAt.getTime();
@@ -226,10 +258,11 @@ export class TransactionsService {
     type?: 'transaction_history' | 'wallet_transfer',
   ): Promise<UnifiedTransactionResponseDto> {
     if (type === 'transaction_history' || !type) {
-      const transaction = await this.prisma.client.transaction_history.findUnique({
-        where: { history_id: id },
-        include: { merchants: true },
-      });
+      const transaction =
+        await this.prisma.client.transaction_history.findUnique({
+          where: { history_id: id },
+          include: { merchants: true },
+        });
 
       if (transaction) {
         return this.transformHistoryTransaction(transaction);
@@ -266,9 +299,10 @@ export class TransactionsService {
     }
 
     if (dto.type === 'transaction_history' || !dto.type) {
-      const transaction = await this.prisma.client.transaction_history.findUnique({
-        where: { history_id: id },
-      });
+      const transaction =
+        await this.prisma.client.transaction_history.findUnique({
+          where: { history_id: id },
+        });
 
       if (transaction) {
         const updated = await this.prisma.client.transaction_history.update({
@@ -332,10 +366,14 @@ export class TransactionsService {
 
   /**
    * Unflag a transaction
+   * @param _id - Transaction ID (unused, requires schema update)
+   * @param _type - Transaction type (unused, requires schema update)
    */
-  async unflagTransaction(
-    id: number,
-    type?: 'transaction_history' | 'wallet_transfer',
+  unflagTransaction(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _id: number,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _type?: 'transaction_history' | 'wallet_transfer',
   ): Promise<UnifiedTransactionResponseDto> {
     // Similar to flagTransaction - requires schema update
     throw new BadRequestException(
@@ -349,7 +387,10 @@ export class TransactionsService {
   async bulkUpdateStatus(
     dto: BulkUpdateStatusDto,
     adminId: number,
-  ): Promise<{ updated: number; failed: Array<{ id: number; error: string }> }> {
+  ): Promise<{
+    updated: number;
+    failed: Array<{ id: number; error: string }>;
+  }> {
     const admin = await this.prisma.client.adminUser.findUnique({
       where: { id: adminId },
     });
@@ -358,7 +399,10 @@ export class TransactionsService {
       throw new BadRequestException('Admin user not found');
     }
 
-    const results = { updated: 0, failed: [] as Array<{ id: number; error: string }> };
+    const results = {
+      updated: 0,
+      failed: [] as Array<{ id: number; error: string }>,
+    };
 
     for (const { id, type } of dto.transactionIds) {
       try {
@@ -382,8 +426,10 @@ export class TransactionsService {
           });
         }
         results.updated++;
-      } catch (error: any) {
-        results.failed.push({ id, error: error.message });
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        results.failed.push({ id, error: errorMessage });
       }
     }
 
@@ -392,23 +438,121 @@ export class TransactionsService {
 
   /**
    * Bulk flag transactions
+   * @param _dto - Bulk flag DTO (unused, requires schema update)
+   * @param _adminId - Admin ID (unused, requires schema update)
    */
-  async bulkFlag(
-    dto: BulkFlagDto,
-    adminId: number,
-  ): Promise<{ flagged: number; failed: Array<{ id: number; error: string }> }> {
+  bulkFlag(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _dto: BulkFlagDto,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _adminId: number,
+  ): Promise<{
+    flagged: number;
+    failed: Array<{ id: number; error: string }>;
+  }> {
     // Requires schema update
     throw new BadRequestException(
       'Bulk flagging functionality requires schema update. Please add is_flagged fields to transaction tables.',
     );
   }
 
+  /**
+   * Export transactions to CSV or JSON
+   */
+  async exportTransactions(
+    dto: GetTransactionsDto,
+    format: 'csv' | 'json' = 'csv',
+  ): Promise<{ data: UnifiedTransactionResponseDto[]; csv?: string }> {
+    // Override pagination to get all matching transactions (with a reasonable limit)
+    const exportDto = { ...dto, page: 1, limit: 10000 };
+
+    const result = await this.findAll(exportDto);
+    const transactions = result.data;
+
+    if (format === 'json') {
+      return { data: transactions };
+    }
+
+    // Generate CSV
+    const csvHeaders = [
+      'ID',
+      'Transaction ID',
+      'Reference',
+      'Type',
+      'Category',
+      'Status',
+      'Currency (Crypto)',
+      'Currency (Fiat)',
+      'Amount (Crypto)',
+      'Amount (Fiat)',
+      'Amount Display',
+      'Fee',
+      'Source Address',
+      'Source Type',
+      'Destination Address',
+      'Destination Type',
+      'Network',
+      'TX Hash',
+      'Payment Method',
+      'Status Updated By',
+      'Status Notes',
+      'Is Flagged',
+      'Created At',
+      'Updated At',
+    ];
+
+    const csvRows = transactions.map((tx) => [
+      tx.id,
+      tx.txId || '',
+      tx.reference || '',
+      tx.type || '',
+      tx.transactionCategory || '',
+      tx.status || '',
+      tx.currency?.crypto || '',
+      tx.currency?.fiat || '',
+      tx.amount?.crypto?.toString() || '',
+      tx.amount?.fiat?.toString() || '',
+      tx.amount?.display || '',
+      tx.fee?.toString() || '',
+      tx.source?.address || '',
+      tx.source?.type || '',
+      tx.destination?.address || '',
+      tx.destination?.type || '',
+      tx.network || '',
+      tx.txHash || '',
+      tx.paymentMethod || '',
+      tx.statusUpdatedBy || '',
+      tx.statusNotes || '',
+      tx.isFlagged ? 'Yes' : 'No',
+      tx.createdAt?.toISOString() || '',
+      tx.updatedAt?.toISOString() || '',
+    ]);
+
+    const escapeCsvField = (field: string | number | undefined): string => {
+      const value = String(field ?? '');
+      if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+        return `"${value.replace(/"/g, '""')}"`;
+      }
+      return value;
+    };
+
+    const csv = [
+      csvHeaders.join(','),
+      ...csvRows.map((row) => row.map(escapeCsvField).join(',')),
+    ].join('\n');
+
+    return { data: transactions, csv };
+  }
+
   // Helper methods
 
-  private buildDateFilter(dateFrom?: Date, dateTo?: Date) {
+  private buildDateFilter(
+    dateFrom?: Date,
+    dateTo?: Date,
+  ): { created_at?: { gte?: bigint; lte?: bigint } } {
     if (!dateFrom && !dateTo) return {};
 
-    const filter: any = {};
+    const filter: { created_at?: { gte?: bigint; lte?: bigint } } = {};
 
     if (dateFrom) {
       filter.created_at = { gte: BigInt(dateFrom.getTime()) };
@@ -425,8 +569,8 @@ export class TransactionsService {
     return filter;
   }
 
-  private buildHistoryFilters(dto: GetTransactionsDto) {
-    const filter: any = {};
+  private buildHistoryFilters(dto: GetTransactionsDto): TransactionFilter {
+    const filter: TransactionFilter = {};
 
     if (dto.status) {
       filter.status = dto.status;
@@ -468,8 +612,8 @@ export class TransactionsService {
     return filter;
   }
 
-  private buildTransferFilters(dto: GetTransactionsDto) {
-    const filter: any = {};
+  private buildTransferFilters(dto: GetTransactionsDto): TransactionFilter {
+    const filter: TransactionFilter = {};
 
     if (dto.status) {
       filter.status = dto.status;
@@ -504,140 +648,165 @@ export class TransactionsService {
   private buildOrderBy(
     dto: GetTransactionsDto,
     tableType: 'history' | 'transfer',
-  ) {
-    const orderBy: any = {};
+  ): Record<string, 'asc' | 'desc'> {
+    const orderBy: Record<string, 'asc' | 'desc'> = {};
+    const sortOrder = dto.sortOrder || SortOrder.DESC;
 
-    if (dto.sortBy === 'created_at') {
-      orderBy.created_at = dto.sortOrder || 'desc';
-    } else if (dto.sortBy === 'status') {
-      orderBy.status = dto.sortOrder || 'desc';
-    } else if (dto.sortBy === 'amount') {
+    if (dto.sortBy === SortBy.CREATED_AT) {
+      orderBy.created_at = sortOrder;
+    } else if (dto.sortBy === SortBy.STATUS) {
+      orderBy.status = sortOrder;
+    } else if (dto.sortBy === SortBy.AMOUNT) {
       if (tableType === 'history') {
-        orderBy.currency_amount = dto.sortOrder || 'desc';
+        orderBy.currency_amount = sortOrder;
       } else {
-        orderBy.amount = dto.sortOrder || 'desc';
+        orderBy.amount = sortOrder;
       }
     } else {
-      orderBy.created_at = dto.sortOrder || 'desc';
+      orderBy.created_at = sortOrder;
     }
 
     return orderBy;
   }
 
-  private transformHistoryTransaction(transaction: any): UnifiedTransactionResponseDto {
-    const createdAt = transaction.created_at_timestamp
-      ? new Date(transaction.created_at_timestamp)
-      : new Date(Number(transaction.created_at));
+  private transformHistoryTransaction(
+    transaction: TransactionHistoryRecord,
+  ): UnifiedTransactionResponseDto {
+    const txRecord = transaction as TransactionHistoryRecord & {
+      created_at_timestamp?: Date;
+      status_updated_by?: string;
+      status_updated_at?: bigint;
+      status_notes?: string;
+      merchant_bank_account?: string;
+      merchant_account_name?: string;
+      merchant_bank_name?: string;
+      payment_method?: string;
+      payment_proof_url?: string;
+      transaction_type?: string;
+    };
 
-    const amountDisplay = transaction.currency_amount
-      ? `N${Number(transaction.currency_amount).toLocaleString()}`
-      : transaction.crypto_amount
-        ? `${Number(transaction.crypto_amount)} ${transaction.crypto_sign?.toUpperCase() || ''}`
+    const createdAt = txRecord.created_at_timestamp
+      ? new Date(txRecord.created_at_timestamp)
+      : new Date(Number(txRecord.created_at));
+
+    const amountDisplay = txRecord.currency_amount
+      ? `N${Number(txRecord.currency_amount).toLocaleString()}`
+      : txRecord.crypto_amount
+        ? `${Number(txRecord.crypto_amount)} ${txRecord.crypto_sign?.toUpperCase() || ''}`
         : '0';
 
     return {
-      id: transaction.history_id,
-      txId: transaction.keychain,
-      reference: transaction.reference,
-      type: this.determineTransactionType(transaction, 'history'),
+      id: txRecord.history_id,
+      txId: txRecord.keychain ?? undefined,
+      reference: txRecord.reference ?? undefined,
+      type: this.determineTransactionType(txRecord, 'history'),
       transactionCategory: 'BUY_SELL',
       dateInitiated: createdAt,
       currency: {
-        crypto: transaction.crypto_sign,
-        fiat: transaction.currency_sign,
-        display: transaction.currency_sign || transaction.crypto_sign || '',
+        crypto: txRecord.crypto_sign ?? undefined,
+        fiat: txRecord.currency_sign ?? undefined,
+        display: txRecord.currency_sign || txRecord.crypto_sign || '',
       },
       amount: {
-        crypto: transaction.crypto_amount
-          ? Number(transaction.crypto_amount)
+        crypto: txRecord.crypto_amount
+          ? Number(txRecord.crypto_amount)
           : undefined,
-        fiat: transaction.currency_amount
-          ? Number(transaction.currency_amount)
+        fiat: txRecord.currency_amount
+          ? Number(txRecord.currency_amount)
           : undefined,
         display: amountDisplay,
       },
       fee: undefined, // Not in current schema
-      status: transaction.status || 'pending',
+      status: txRecord.status || 'pending',
       isFlagged: false, // Not in current schema
       source: {
-        address: transaction.merchant_bank_account || 'N/A',
+        address: txRecord.merchant_bank_account || 'N/A',
         type: 'MERCHANT',
-        name: transaction.merchant_account_name,
+        name: txRecord.merchant_account_name,
       },
       destination: {
-        address: transaction.user_api_key || 'N/A',
+        address: txRecord.user_api_key || 'N/A',
         type: 'WALLET',
       },
-      merchant: transaction.merchants
+      merchant: txRecord.merchants
         ? {
-            keychain: transaction.merchants.keychain,
-            name: transaction.merchants.user_name,
-            email: transaction.merchants.email,
-            bankName: transaction.merchant_bank_name,
-            bankAccount: transaction.merchant_bank_account,
+            keychain: txRecord.merchants.keychain ?? undefined,
+            name: txRecord.merchants.user_name ?? undefined,
+            email: txRecord.merchants.email ?? undefined,
+            bankName: txRecord.merchant_bank_name,
+            bankAccount: txRecord.merchant_bank_account,
           }
         : undefined,
-      paymentMethod: transaction.payment_method,
-      paymentProofUrl: transaction.payment_proof_url,
-      statusUpdatedBy: transaction.status_updated_by,
-      statusUpdatedAt: transaction.status_updated_at
-        ? new Date(Number(transaction.status_updated_at))
+      paymentMethod: txRecord.payment_method,
+      paymentProofUrl: txRecord.payment_proof_url,
+      statusUpdatedBy: txRecord.status_updated_by,
+      statusUpdatedAt: txRecord.status_updated_at
+        ? new Date(Number(txRecord.status_updated_at))
         : undefined,
-      statusNotes: transaction.status_notes,
+      statusNotes: txRecord.status_notes,
       createdAt,
-      updatedAt: transaction.updated_at
-        ? new Date(Number(transaction.updated_at))
+      updatedAt: txRecord.updated_at
+        ? new Date(Number(txRecord.updated_at))
         : undefined,
     };
   }
 
-  private transformTransferTransaction(transaction: any): UnifiedTransactionResponseDto {
-    const createdAt = transaction.created_at_timestamp
-      ? new Date(transaction.created_at_timestamp)
-      : new Date(Number(transaction.created_at));
+  private transformTransferTransaction(
+    transaction: WalletTransferRecord,
+  ): UnifiedTransactionResponseDto {
+    const txRecord = transaction as WalletTransferRecord & {
+      created_at_timestamp?: Date;
+      tx_hash?: string;
+      note?: string;
+      recipient_name?: string;
+    };
 
-    const amountDisplay = `${Number(transaction.amount)} ${transaction.asset}`;
+    const createdAt = txRecord.created_at_timestamp
+      ? new Date(txRecord.created_at_timestamp)
+      : new Date(Number(txRecord.created_at));
+
+    const amountDisplay = `${Number(txRecord.amount)} ${txRecord.asset}`;
 
     return {
-      id: transaction.transfer_id,
-      txId: transaction.reference,
-      reference: transaction.reference,
+      id: txRecord.transfer_id,
+      txId: txRecord.reference ?? undefined,
+      reference: txRecord.reference ?? undefined,
       type: 'OUTGOING', // TODO: Determine based on user perspective
       transactionCategory: 'WALLET_TRANSFER',
       dateInitiated: createdAt,
       currency: {
-        crypto: transaction.asset,
-        display: transaction.asset,
+        crypto: txRecord.asset ?? undefined,
+        display: txRecord.asset || '',
       },
       amount: {
-        crypto: Number(transaction.amount),
+        crypto: Number(txRecord.amount),
         display: amountDisplay,
       },
-      fee: transaction.fee ? Number(transaction.fee) : undefined,
-      status: transaction.status || 'pending',
+      fee: txRecord.fee ? Number(txRecord.fee) : undefined,
+      status: txRecord.status || 'pending',
       isFlagged: false, // Not in current schema
       source: {
-        address: transaction.user_api_key || 'N/A',
+        address: txRecord.user_api_key || 'N/A',
         type: 'WALLET',
       },
       destination: {
-        address: transaction.recipient_wallet_address,
+        address: txRecord.recipient_wallet_address ?? undefined,
         type: 'WALLET',
-        name: transaction.recipient_name,
-        network: transaction.network,
+        name: txRecord.recipient_name,
+        network: txRecord.network ?? undefined,
       },
-      txHash: transaction.tx_hash,
-      network: transaction.network,
-      notes: transaction.note,
+      txHash: txRecord.tx_hash,
+      network: txRecord.network ?? undefined,
+      notes: txRecord.note,
       createdAt,
-      updatedAt: transaction.updated_at
-        ? new Date(Number(transaction.updated_at))
+      updatedAt: txRecord.updated_at
+        ? new Date(Number(txRecord.updated_at))
         : undefined,
     };
   }
 
   private determineTransactionType(
-    transaction: any,
+    transaction: { transaction_type?: string },
     tableType: 'history' | 'transfer',
   ): 'INCOMING' | 'OUTGOING' | 'CONVERSION' {
     if (tableType === 'history') {
@@ -655,4 +824,3 @@ export class TransactionsService {
     }
   }
 }
-

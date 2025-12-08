@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { Prisma } from '@prisma/client';
@@ -100,5 +100,63 @@ export class UsersService {
         totalPages,
       },
     };
+  }
+
+  async findOne(id: number) {
+    const user = await this.prisma.client.send_coin_user.findUnique({
+      where: { azer_id: id },
+      select: {
+        // Include only safe fields, exclude sensitive data
+        azer_id: true,
+        first_name: true,
+        last_name: true,
+        user_email: true,
+        verify_user: true,
+        device: true,
+        ip_addr: true,
+        logincount: true,
+        profession: true,
+        offeredsolution: true,
+        solutiontype: true,
+        country: true,
+        location: true,
+        phone: true,
+        device_security: true,
+        activity_notify: true,
+        default_currency: true,
+        address: true,
+        linkedin: true,
+        facebook: true,
+        twitter: true,
+        instagram: true,
+        github: true,
+        profile_pix: true,
+        webite: true,
+        company_logo: true,
+        company_name: true,
+        company_verify: true,
+        country_iso2: true,
+        account_ban: true,
+        timestamp: true,
+        referal_id: true,
+        referee: true,
+        google_id: true,
+        oauth_provider: true,
+        apple_id: true,
+        apple_verified: true,
+        is_private_email: true,
+        auth_provider: true,
+        last_login_ip: true,
+        last_login_location: true,
+        last_login_at: true,
+        // Exclude: password, live_secret_key, live_public_key, test_public_key, test_webhook_key, api_key
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    return user;
   }
 }

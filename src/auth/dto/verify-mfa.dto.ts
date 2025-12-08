@@ -7,7 +7,7 @@ export class VerifyMfaDto {
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
   @IsString()
-  tempToken: string;
+  tempToken!: string;
 
   @ApiProperty({
     description: '6-digit TOTP code from authenticator app',
@@ -17,5 +17,5 @@ export class VerifyMfaDto {
   })
   @IsString()
   @Length(6, 8)
-  code: string;
+  code!: string;
 }

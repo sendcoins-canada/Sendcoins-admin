@@ -2,9 +2,10 @@ import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
 import { AdminUsersService } from './admin-users.service';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
-import { AdminRole } from '../auth/roles.enum';
+import { PermissionsGuard } from '../auth/permissions.guard';
+import { RequirePermission } from '../auth/require-permission.decorator';
+import { Permission } from '../auth/permissions.enum';
+import { AdminRole } from '@prisma/client';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -16,12 +17,12 @@ import {
 @ApiTags('AdminUsers')
 @ApiBearerAuth()
 @Controller('admin-users')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class AdminUsersController {
   constructor(private readonly adminUsersService: AdminUsersService) {}
 
   @Post()
-  @Roles(AdminRole.SUPER_ADMIN)
+  @RequirePermission(Permission.MANAGE_ADMINS)
   @ApiOperation({
     summary: 'Create admin user',
     description:
@@ -76,7 +77,7 @@ export class AdminUsersController {
   }
 
   @Post(':id/resend-invite')
-  @Roles(AdminRole.SUPER_ADMIN)
+  @RequirePermission(Permission.MANAGE_ADMINS)
   @ApiOperation({
     summary: 'Resend password setup invite',
     description:

@@ -10,5 +10,5 @@ export class EnableMfaDto {
   })
   @IsString()
   @Length(6, 8)
-  code: string;
+  code!: string;
 }

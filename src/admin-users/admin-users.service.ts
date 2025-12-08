@@ -6,11 +6,15 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
 import { MailService } from '../mail/mail.service';
-import { AdminStatus, RoleStatus } from '@prisma/client';
+import { AdminStatus, RoleStatus, Prisma } from '@prisma/client';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import type { StringValue } from 'ms';
 import { AdminAuditService } from './admin-audit.service';
-import { Prisma } from '@prisma/client';
+
+// Type for admin user with department relation
+type AdminWithDepartment = Prisma.AdminUserGetPayload<{
+  include: { department: true };
+}>;
 
 @Injectable()
 export class AdminUsersService {
@@ -49,9 +53,7 @@ export class AdminUsersService {
       }
     }
 
-    // Using a loosely-typed admin object here to avoid tight coupling
-    // to Prisma's generated helper types, which can change between versions.
-    let admin: any;
+    let admin: AdminWithDepartment;
     try {
       admin = await this.prisma.client.adminUser.create({
         data: {
@@ -122,7 +124,6 @@ export class AdminUsersService {
       departmentId: admin.departmentId,
     });
 
-    // Type guard for department
     const department = admin.department;
 
     return {
@@ -131,13 +132,10 @@ export class AdminUsersService {
       firstName: admin.firstName,
       lastName: admin.lastName,
       departmentId: admin.departmentId,
-
       department: department
         ? {
             id: department.id,
-
             name: department.name,
-
             description: department.description,
           }
         : null,

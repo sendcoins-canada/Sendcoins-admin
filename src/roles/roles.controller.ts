@@ -14,9 +14,9 @@ import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
-import { AdminRole } from '../auth/roles.enum';
+import { PermissionsGuard } from '../auth/permissions.guard';
+import { RequirePermission } from '../auth/require-permission.decorator';
+import { Permission } from '../auth/permissions.enum';
 import {
   ApiTags,
   ApiOperation,
@@ -28,16 +28,16 @@ import {
 @ApiTags('Roles')
 @ApiBearerAuth()
 @Controller('roles')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
   @Post()
-  @Roles(AdminRole.SUPER_ADMIN)
+  @RequirePermission(Permission.MANAGE_ROLES)
   @ApiOperation({
     summary: 'Create a new role',
     description:
-      'Create a new role with specified permissions. Only SUPER_ADMIN can create roles.',
+      'Create a new role with specified permissions. Requires MANAGE_ROLES permission.',
   })
   @ApiBody({ type: CreateRoleDto })
   create(
@@ -54,7 +54,7 @@ export class RolesController {
   }
 
   @Get()
-  @Roles(AdminRole.SUPER_ADMIN, AdminRole.COMPLIANCE, AdminRole.ENGINEER)
+  @RequirePermission(Permission.MANAGE_ROLES)
   @ApiOperation({
     summary: 'Get all roles',
     description: 'Returns a list of all roles with their permissions.',
@@ -64,7 +64,7 @@ export class RolesController {
   }
 
   @Get(':id')
-  @Roles(AdminRole.SUPER_ADMIN, AdminRole.COMPLIANCE, AdminRole.ENGINEER)
+  @RequirePermission(Permission.MANAGE_ROLES)
   @ApiOperation({
     summary: 'Get a role by ID',
     description: 'Returns detailed information about a specific role.',
@@ -75,11 +75,11 @@ export class RolesController {
   }
 
   @Patch(':id')
-  @Roles(AdminRole.SUPER_ADMIN)
+  @RequirePermission(Permission.MANAGE_ROLES)
   @ApiOperation({
     summary: 'Update a role',
     description:
-      'Update role details and permissions. Only SUPER_ADMIN can update roles.',
+      'Update role details and permissions. Requires MANAGE_ROLES permission.',
   })
   @ApiParam({ name: 'id', type: 'number', description: 'Role ID' })
   @ApiBody({ type: UpdateRoleDto })
@@ -98,11 +98,11 @@ export class RolesController {
   }
 
   @Delete(':id')
-  @Roles(AdminRole.SUPER_ADMIN)
+  @RequirePermission(Permission.MANAGE_ROLES)
   @ApiOperation({
     summary: 'Delete a role',
     description:
-      'Delete a role. Only works if the role is not assigned to any admin users. Only SUPER_ADMIN can delete roles.',
+      'Delete a role. Only works if the role is not assigned to any admin users. Requires MANAGE_ROLES permission.',
   })
   @ApiParam({ name: 'id', type: 'number', description: 'Role ID' })
   remove(@Param('id') id: string) {

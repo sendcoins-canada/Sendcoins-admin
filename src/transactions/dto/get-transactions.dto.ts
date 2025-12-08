@@ -162,6 +162,3 @@ export class GetTransactionsDto {
   @IsEnum(SortOrder)
   sortOrder?: SortOrder = SortOrder.DESC;
 }
-
-
-

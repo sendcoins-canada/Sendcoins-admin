@@ -52,10 +52,16 @@ export class UnifiedTransactionResponseDto {
   @ApiProperty({ example: '0fdu14uuuzdyvplw1rawsflcubetcgc5znna' })
   reference!: string;
 
-  @ApiProperty({ enum: ['INCOMING', 'OUTGOING', 'CONVERSION'], example: 'OUTGOING' })
+  @ApiProperty({
+    enum: ['INCOMING', 'OUTGOING', 'CONVERSION'],
+    example: 'OUTGOING',
+  })
   type!: 'INCOMING' | 'OUTGOING' | 'CONVERSION';
 
-  @ApiProperty({ enum: ['BUY_SELL', 'WALLET_TRANSFER'], example: 'WALLET_TRANSFER' })
+  @ApiProperty({
+    enum: ['BUY_SELL', 'WALLET_TRANSFER'],
+    example: 'WALLET_TRANSFER',
+  })
   transactionCategory!: 'BUY_SELL' | 'WALLET_TRANSFER';
 
   @ApiProperty({ example: '2025-11-02T21:30:00Z' })
@@ -74,7 +80,10 @@ export class UnifiedTransactionResponseDto {
   @ApiProperty({ example: 2000, required: false })
   fee?: number;
 
-  @ApiProperty({ enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'], example: 'completed' })
+  @ApiProperty({
+    enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],
+    example: 'completed',
+  })
   status!: string;
 
   @ApiProperty({ example: false })
@@ -177,6 +186,3 @@ export class PaginatedTransactionsResponseDto {
     totalPages: number;
   };
 }
-
-
-
