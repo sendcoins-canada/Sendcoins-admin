@@ -65,8 +65,29 @@ async function bootstrap() {
     }),
   );
 
-  // Security headers
-  app.use(helmet());
+  // Security headers with CSP configured for Swagger UI CDN assets
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: [
+            "'self'",
+            "'unsafe-inline'", // Swagger UI may need inline styles
+            'https://cdnjs.cloudflare.com',
+          ],
+          scriptSrc: [
+            "'self'",
+            "'unsafe-inline'", // Swagger UI initialization script
+            'https://cdnjs.cloudflare.com',
+          ],
+          imgSrc: ["'self'", 'data:', 'https:'],
+          connectSrc: ["'self'"],
+          fontSrc: ["'self'", 'https:', 'data:'],
+        },
+      },
+    }),
+  );
 
   // CORS
   const corsOrigins = (
