@@ -81,17 +81,7 @@ async function bootstrap() {
     credentials: true,
   });
 
-  const config = new DocumentBuilder()
-    .setTitle('SendCoins Admin API')
-    .setDescription('API documentation for the SendCoins Admin backend')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
-
-  // Protect Swagger with HTTP Basic Auth in production
+  // Protect Swagger with HTTP Basic Auth in production (before Swagger setup)
   if (process.env.NODE_ENV === 'production') {
     app.use(
       '/api/docs',
@@ -102,6 +92,20 @@ async function bootstrap() {
       }),
     );
   }
+
+  const config = new DocumentBuilder()
+    .setTitle('SendCoins Admin API')
+    .setDescription('API documentation for the SendCoins Admin backend')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document, {
+    customSiteTitle: 'SendCoins Admin API Docs',
+    customfavIcon: '/favicon.ico',
+    customCss: '.swagger-ui .topbar { display: none }',
+  });
 
   const port = process.env.PORT || 4005;
   await app.listen(port);
