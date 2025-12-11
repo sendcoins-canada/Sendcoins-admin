@@ -18,11 +18,11 @@ class TransactionIdentifier {
 
   @ApiProperty({
     description: 'Transaction type',
-    enum: ['transaction_history', 'wallet_transfer'],
+    enum: ['transaction_history', 'wallet_transfer', 'fiat_transfer'],
     example: 'transaction_history',
   })
-  @IsEnum(['transaction_history', 'wallet_transfer'])
-  type!: 'transaction_history' | 'wallet_transfer';
+  @IsEnum(['transaction_history', 'wallet_transfer', 'fiat_transfer'])
+  type!: 'transaction_history' | 'wallet_transfer' | 'fiat_transfer';
 }
 
 export class BulkUpdateStatusDto {

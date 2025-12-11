@@ -122,12 +122,12 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  
+
   // Register redirect routes BEFORE Swagger setup so they take precedence
   if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
     const cdnBase = 'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.10.5';
     const expressApp = app.getHttpAdapter().getInstance();
-    
+
     // Redirect static asset requests to CDN (registered before Swagger, so they're matched first)
     expressApp.get('/api/docs/swagger-ui.css', (req: any, res: any) => {
       res.redirect(301, `${cdnBase}/swagger-ui.min.css`);
@@ -135,11 +135,14 @@ async function bootstrap() {
     expressApp.get('/api/docs/swagger-ui-bundle.js', (req: any, res: any) => {
       res.redirect(301, `${cdnBase}/swagger-ui-bundle.min.js`);
     });
-    expressApp.get('/api/docs/swagger-ui-standalone-preset.js', (req: any, res: any) => {
-      res.redirect(301, `${cdnBase}/swagger-ui-standalone-preset.min.js`);
-    });
+    expressApp.get(
+      '/api/docs/swagger-ui-standalone-preset.js',
+      (req: any, res: any) => {
+        res.redirect(301, `${cdnBase}/swagger-ui-standalone-preset.min.js`);
+      },
+    );
   }
-  
+
   const swaggerOptions: any = {
     customSiteTitle: 'SendCoins Admin API Docs',
     customfavIcon: '/favicon.ico',

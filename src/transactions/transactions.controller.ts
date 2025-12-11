@@ -29,6 +29,9 @@ import {
 import { UpdateTransactionStatusDto } from './dto/update-transaction-status.dto';
 import { FlagTransactionDto } from './dto/flag-transaction.dto';
 import { BulkUpdateStatusDto, BulkFlagDto } from './dto/bulk-action.dto';
+import { VerifyTransactionDto } from './dto/verify-transaction.dto';
+import { ApproveTransactionDto } from './dto/approve-transaction.dto';
+import { CancelTransactionDto } from './dto/cancel-transaction.dto';
 import {
   UnifiedTransactionResponseDto,
   TransactionStatsResponseDto,
@@ -41,7 +44,7 @@ import { Permission } from '../auth/permissions.enum';
 
 // Authenticated request type
 interface AuthenticatedRequest extends Request {
-  user: { sub: number; email: string; role: string };
+  user: { id: number; email: string; role: string };
 }
 
 @ApiTags('Transactions')
@@ -122,7 +125,7 @@ export class TransactionsController {
   })
   @ApiQuery({
     name: 'type',
-    enum: ['transaction_history', 'wallet_transfer'],
+    enum: ['transaction_history', 'wallet_transfer', 'fiat_transfer'],
     required: false,
     description: 'Transaction type (auto-detected if not provided)',
   })
@@ -134,7 +137,8 @@ export class TransactionsController {
   @ApiResponse({ status: 404, description: 'Transaction not found' })
   async findOne(
     @Param('id', ParseIntPipe) id: number,
-    @Query('type') type?: 'transaction_history' | 'wallet_transfer',
+    @Query('type')
+    type?: 'transaction_history' | 'wallet_transfer' | 'fiat_transfer',
   ): Promise<UnifiedTransactionResponseDto> {
     return this.transactionsService.findOne(id, type);
   }
@@ -161,7 +165,7 @@ export class TransactionsController {
     @Body() dto: UpdateTransactionStatusDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<UnifiedTransactionResponseDto> {
-    return this.transactionsService.updateStatus(id, dto, req.user.sub);
+    return this.transactionsService.updateStatus(id, dto, req.user.id);
   }
 
   @Post(':id/flag')
@@ -186,7 +190,7 @@ export class TransactionsController {
     @Body() dto: FlagTransactionDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<UnifiedTransactionResponseDto> {
-    return this.transactionsService.flagTransaction(id, dto, req.user.sub);
+    return this.transactionsService.flagTransaction(id, dto, req.user.id);
   }
 
   @Delete(':id/flag')
@@ -208,7 +212,8 @@ export class TransactionsController {
   @ApiResponse({ status: 404, description: 'Transaction not found' })
   async unflagTransaction(
     @Param('id', ParseIntPipe) id: number,
-    @Query('type') type?: 'transaction_history' | 'wallet_transfer',
+    @Query('type')
+    type?: 'transaction_history' | 'wallet_transfer' | 'fiat_transfer',
   ): Promise<UnifiedTransactionResponseDto> {
     return this.transactionsService.unflagTransaction(id, type);
   }
@@ -246,7 +251,7 @@ export class TransactionsController {
     updated: number;
     failed: Array<{ id: number; error: string }>;
   }> {
-    return this.transactionsService.bulkUpdateStatus(dto, req.user.sub);
+    return this.transactionsService.bulkUpdateStatus(dto, req.user.id);
   }
 
   @Post('bulk/flag')
@@ -282,7 +287,7 @@ export class TransactionsController {
     flagged: number;
     failed: Array<{ id: number; error: string }>;
   }> {
-    return this.transactionsService.bulkFlag(dto, req.user.sub);
+    return this.transactionsService.bulkFlag(dto, req.user.id);
   }
 
   @Get('export')
@@ -336,5 +341,128 @@ export class TransactionsController {
       `attachment; filename="transactions-${Date.now()}.csv"`,
     );
     return res.send(result.csv);
+  }
+
+  @Post(':id/verify')
+  @RequirePermission(Permission.VERIFY_TRANSACTIONS)
+  @ApiOperation({
+    summary: 'Verify transaction with hash',
+    description: 'Verifies a transaction using the provided transaction hash',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Transaction ID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Verified transaction',
+    type: UnifiedTransactionResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Transaction not found' })
+  @ApiResponse({ status: 400, description: 'Invalid transaction hash' })
+  async verifyTransaction(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: VerifyTransactionDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<UnifiedTransactionResponseDto> {
+    return this.transactionsService.verifyTransaction(id, dto, req.user.id);
+  }
+
+  @Post(':id/approve')
+  @RequirePermission(Permission.VERIFY_TRANSACTIONS)
+  @ApiOperation({
+    summary: 'Approve transaction',
+    description: 'Approves a transaction, setting its status to completed',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Transaction ID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Approved transaction',
+    type: UnifiedTransactionResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Transaction not found' })
+  async approveTransaction(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ApproveTransactionDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<UnifiedTransactionResponseDto> {
+    return this.transactionsService.approveTransaction(id, dto, req.user.id);
+  }
+
+  @Post(':id/cancel')
+  @RequirePermission(Permission.VERIFY_TRANSACTIONS)
+  @ApiOperation({
+    summary: 'Cancel transaction',
+    description: 'Cancels a transaction, setting its status to cancelled',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Transaction ID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cancelled transaction',
+    type: UnifiedTransactionResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Transaction not found' })
+  async cancelTransaction(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CancelTransactionDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<UnifiedTransactionResponseDto> {
+    return this.transactionsService.cancelTransaction(id, dto, req.user.id);
+  }
+
+  @Get(':id/user')
+  @RequirePermission(Permission.READ_TRANSACTIONS)
+  @ApiOperation({
+    summary: 'Get user details for a transaction',
+    description: 'Returns user information associated with a transaction',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Transaction ID',
+  })
+  @ApiQuery({
+    name: 'type',
+    enum: ['transaction_history', 'wallet_transfer', 'fiat_transfer'],
+    required: false,
+    description: 'Transaction type (auto-detected if not provided)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User details',
+    schema: {
+      type: 'object',
+      properties: {
+        azer_id: { type: 'number' },
+        first_name: { type: 'string', nullable: true },
+        last_name: { type: 'string', nullable: true },
+        user_email: { type: 'string', nullable: true },
+        verify_user: { type: 'boolean', nullable: true },
+        device: { type: 'string', nullable: true },
+        ip_addr: { type: 'string', nullable: true },
+        country: { type: 'string', nullable: true },
+        location: { type: 'string', nullable: true },
+        phone: { type: 'string', nullable: true },
+        account_ban: { type: 'string' },
+        timestamp: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Transaction or user not found' })
+  async getTransactionUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('type')
+    type?: 'transaction_history' | 'wallet_transfer' | 'fiat_transfer',
+  ) {
+    return this.transactionsService.getTransactionUser(id, type);
   }
 }

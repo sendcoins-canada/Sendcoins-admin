@@ -59,10 +59,10 @@ export class UnifiedTransactionResponseDto {
   type!: 'INCOMING' | 'OUTGOING' | 'CONVERSION';
 
   @ApiProperty({
-    enum: ['BUY_SELL', 'WALLET_TRANSFER'],
+    enum: ['BUY_SELL', 'WALLET_TRANSFER', 'FIAT_TRANSFER'],
     example: 'WALLET_TRANSFER',
   })
-  transactionCategory!: 'BUY_SELL' | 'WALLET_TRANSFER';
+  transactionCategory!: 'BUY_SELL' | 'WALLET_TRANSFER' | 'FIAT_TRANSFER';
 
   @ApiProperty({ example: '2025-11-02T21:30:00Z' })
   dateInitiated!: Date;
