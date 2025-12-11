@@ -18,6 +18,7 @@ export enum TransactionType {
   CONVERSION = 'conversion',
   BUY_SELL = 'buy_sell',
   WALLET_TRANSFER = 'wallet_transfer',
+  FIAT_TRANSFER = 'fiat_transfer',
 }
 
 export enum TransactionStatus {

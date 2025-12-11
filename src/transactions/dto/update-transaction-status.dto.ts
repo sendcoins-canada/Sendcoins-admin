@@ -5,12 +5,12 @@ import { TransactionStatus } from './get-transactions.dto';
 export class UpdateTransactionStatusDto {
   @ApiProperty({
     description: 'Transaction type (optional, auto-detected if not provided)',
-    enum: ['transaction_history', 'wallet_transfer'],
+    enum: ['transaction_history', 'wallet_transfer', 'fiat_transfer'],
     required: false,
   })
   @IsOptional()
-  @IsEnum(['transaction_history', 'wallet_transfer'])
-  type?: 'transaction_history' | 'wallet_transfer';
+  @IsEnum(['transaction_history', 'wallet_transfer', 'fiat_transfer'])
+  type?: 'transaction_history' | 'wallet_transfer' | 'fiat_transfer';
 
   @ApiProperty({
     description: 'New transaction status',

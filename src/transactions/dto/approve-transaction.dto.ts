@@ -1,7 +1,7 @@
 import { IsOptional, IsString, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class FlagTransactionDto {
+export class ApproveTransactionDto {
   @ApiProperty({
     description: 'Transaction type (optional, auto-detected if not provided)',
     enum: ['transaction_history', 'wallet_transfer', 'fiat_transfer'],
@@ -12,11 +12,11 @@ export class FlagTransactionDto {
   type?: 'transaction_history' | 'wallet_transfer' | 'fiat_transfer';
 
   @ApiProperty({
-    description: 'Reason for flagging the transaction',
-    example: 'Suspicious activity detected',
+    description: 'Optional notes about the approval',
+    example: 'Transaction approved after review',
     required: false,
   })
   @IsOptional()
   @IsString()
-  reason?: string;
+  notes?: string;
 }

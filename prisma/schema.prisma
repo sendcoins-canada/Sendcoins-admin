@@ -19,15 +19,15 @@ model AdminAuditLog {
 }
 
 model AdminRefreshToken {
-  id          Int       @id @default(autoincrement())
-  adminId     Int
-  token       String    @unique @db.VarChar(500)
-  expiresAt   DateTime  @db.Timestamp(6)
-  isRevoked   Boolean   @default(false)
-  deviceInfo  String?   @db.VarChar(500)
-  ipAddress   String?   @db.VarChar(45)
-  createdAt   DateTime  @default(now()) @db.Timestamp(6)
-  admin       AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  id         Int       @id @default(autoincrement())
+  adminId    Int
+  token      String    @unique @db.VarChar(500)
+  expiresAt  DateTime  @db.Timestamp(6)
+  isRevoked  Boolean   @default(false)
+  deviceInfo String?   @db.VarChar(500)
+  ipAddress  String?   @db.VarChar(45)
+  createdAt  DateTime  @default(now()) @db.Timestamp(6)
+  admin      AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
   @@index([adminId])
   @@index([token])
@@ -35,32 +35,32 @@ model AdminRefreshToken {
 }
 
 model AdminUser {
-  id                  Int                  @id @default(autoincrement())
-  email               String               @unique @db.VarChar(255)
-  firstName           String               @db.VarChar(100)
-  lastName            String               @db.VarChar(100)
-  profile             String?              @db.VarChar(255)
-  departmentId        Int?
-  role                AdminRole            @default(ENGINEER)
-  roleId              Int?
-  status              AdminStatus          @default(ACTIVE)
-  password            String               @db.VarChar(255)
-  passwordSet         Boolean              @default(false)
+  id                   Int                 @id @default(autoincrement())
+  email                String              @unique @db.VarChar(255)
+  firstName            String              @db.VarChar(100)
+  lastName             String              @db.VarChar(100)
+  profile              String?             @db.VarChar(255)
+  departmentId         Int?
+  role                 AdminRole           @default(ENGINEER)
+  roleId               Int?
+  status               AdminStatus         @default(ACTIVE)
+  password             String              @db.VarChar(255)
+  passwordSet          Boolean             @default(false)
   lastPasswordChangeAt DateTime?           @db.Timestamp(6)
-  lastLoginAt         DateTime?            @db.Timestamp(6)
-  mfaEnabled          Boolean              @default(false)
-  mfaSecret           String?              @db.VarChar(255)
-  mfaBackupCodes      Json?
-  lastMfaAt           DateTime?            @db.Timestamp(6)
-  allowedIps          Json?
-  deletedAt           DateTime?            @db.Timestamp(6)
-  createdAt           DateTime             @default(now()) @db.Timestamp(6)
-  updatedAt           DateTime             @updatedAt @db.Timestamp(6)
-  department          Department?          @relation(fields: [departmentId], references: [id])
-  dynamicRole         Role?                @relation("AdminUserRole", fields: [roleId], references: [id])
-  rolesCreated        Role[]               @relation("RoleCreatedBy")
-  rolesLastUpdated    Role[]               @relation("RoleLastUpdatedBy")
-  refreshTokens       AdminRefreshToken[]
+  lastLoginAt          DateTime?           @db.Timestamp(6)
+  mfaEnabled           Boolean             @default(false)
+  mfaSecret            String?             @db.VarChar(255)
+  mfaBackupCodes       Json?
+  lastMfaAt            DateTime?           @db.Timestamp(6)
+  allowedIps           Json?
+  deletedAt            DateTime?           @db.Timestamp(6)
+  createdAt            DateTime            @default(now()) @db.Timestamp(6)
+  updatedAt            DateTime            @updatedAt @db.Timestamp(6)
+  department           Department?         @relation(fields: [departmentId], references: [id])
+  dynamicRole          Role?               @relation("AdminUserRole", fields: [roleId], references: [id])
+  rolesCreated         Role[]              @relation("RoleCreatedBy")
+  rolesLastUpdated     Role[]              @relation("RoleLastUpdatedBy")
+  refreshTokens        AdminRefreshToken[]
 }
 
 model Department {
@@ -656,6 +656,10 @@ model transaction_history {
   ip_address                String?    @db.VarChar(45)
   device                    String?
   location                  String?    @db.VarChar(255)
+  is_flagged                Boolean?   @default(false)
+  flagged_at                BigInt?
+  flagged_by                String?    @db.VarChar(255)
+  flagged_reason            String?
   created_at                BigInt
   updated_at                BigInt?
   created_at_timestamp      DateTime?  @default(now()) @db.Timestamp(6)
@@ -674,6 +678,7 @@ model transaction_history {
   @@index([user_api_key], map: "idx_transactions_user_api_key")
   @@index([user_api_key, asset_type, crypto_sign, created_at(sort: Desc)], map: "idx_transactions_user_asset")
   @@index([user_api_key, status, created_at(sort: Desc)], map: "idx_transactions_user_status")
+  @@index([is_flagged], map: "idx_transactions_is_flagged")
 }
 
 model user_notifications {
@@ -742,6 +747,10 @@ model wallet_transfers {
   metadata                 Json?
   ip_address               String?   @db.VarChar(45)
   device                   String?
+  is_flagged               Boolean?  @default(false)
+  flagged_at               BigInt?
+  flagged_by               String?   @db.VarChar(255)
+  flagged_reason           String?
   created_at               BigInt
   updated_at               BigInt?
   created_at_timestamp     DateTime? @default(now()) @db.Timestamp(6)
@@ -749,6 +758,40 @@ model wallet_transfers {
   @@index([reference], map: "idx_wallet_transfers_reference")
   @@index([status], map: "idx_wallet_transfers_status")
   @@index([user_api_key, created_at(sort: Desc)], map: "idx_wallet_transfers_user")
+  @@index([is_flagged], map: "idx_wallet_transfers_is_flagged")
+}
+
+model fiat_bank_transfers {
+  id                   Int       @id @default(autoincrement())
+  reference            String    @unique @db.VarChar(36)
+  user_api_key         String    @db.VarChar(255)
+  user_email           String    @db.VarChar(255)
+  destination_country  String    @db.VarChar(5)
+  currency             String    @db.VarChar(10)
+  amount               Decimal   @db.Decimal(28, 8)
+  full_name            String    @db.VarChar(150)
+  bank_name            String    @db.VarChar(150)
+  account_number       String    @db.VarChar(80)
+  transit_number       String?   @db.VarChar(80)
+  notes                String?
+  status               String?   @default("pending") @db.VarChar(20)
+  status_updated_by    String?   @db.VarChar(255)
+  status_updated_at    BigInt?
+  status_notes         String?
+  is_flagged           Boolean?  @default(false)
+  flagged_at           BigInt?
+  flagged_by           String?   @db.VarChar(255)
+  flagged_reason       String?
+  created_at           BigInt
+  updated_at           BigInt?
+  created_at_timestamp DateTime? @default(now()) @db.Timestamp(6)
+  ip_address           String?   @db.VarChar(45)
+  device               String?
+
+  @@index([reference], map: "idx_fiat_transfers_ref")
+  @@index([status], map: "idx_fiat_transfers_status")
+  @@index([user_api_key, created_at(sort: Desc)], map: "idx_fiat_transfers_user")
+  @@index([is_flagged], map: "idx_fiat_transfers_is_flagged")
 }
 
 enum AdminRole {
