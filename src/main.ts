@@ -91,8 +91,14 @@ async function bootstrap() {
 
   // CORS - Allow all origins
   app.enableCors({
-    origin: true, // Allow all origins
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Allow all origins
+      callback(null, true);
+    },
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
   });
 
   // Protect Swagger with HTTP Basic Auth in production (before Swagger setup)
