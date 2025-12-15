@@ -91,12 +91,17 @@ async function bootstrap() {
 
   // CORS - Allow all origins
   app.enableCors({
-    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      // Allow all origins
-      callback(null, true);
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean | string) => void) => {
+      // Allow all origins - with credentials, we must return the actual origin string (not '*')
+      // If no origin (e.g., same-origin request), allow it
+      if (!origin) {
+        callback(null, true);
+      } else {
+        callback(null, origin);
+      }
     },
     credentials: true,
-    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     exposedHeaders: ['Content-Range', 'X-Content-Range'],
   });
