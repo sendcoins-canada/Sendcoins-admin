@@ -1,70 +1,68 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class TransactionSourceDestinationDto {
-  @ApiProperty({ example: '0X23423 ERC 20' })
+  @ApiProperty()
   address!: string;
 
-  @ApiProperty({ enum: ['WALLET', 'BANK', 'MERCHANT'], example: 'WALLET' })
+  @ApiProperty({ enum: ['WALLET', 'BANK', 'MERCHANT'] })
   type!: 'WALLET' | 'BANK' | 'MERCHANT';
 
-  @ApiProperty({ example: 'Binance Wallet', required: false })
+  @ApiProperty({ required: false })
   name?: string;
 
-  @ApiProperty({ example: 'ethereum', required: false })
+  @ApiProperty({ required: false })
   network?: string;
 }
 
 export class TransactionAmountDto {
-  @ApiProperty({ example: 0.5, required: false })
+  @ApiProperty({ required: false })
   crypto?: number;
 
-  @ApiProperty({ example: 20000, required: false })
+  @ApiProperty({ required: false })
   fiat?: number;
 
-  @ApiProperty({ example: 'N20,000 ~$10' })
+  @ApiProperty()
   display!: string;
 }
 
 export class TransactionMerchantDto {
-  @ApiProperty({ example: 'abc12345' })
+  @ApiProperty()
   keychain!: string;
 
-  @ApiProperty({ example: 'John Doe' })
+  @ApiProperty()
   name!: string;
 
-  @ApiProperty({ example: 'john@example.com' })
+  @ApiProperty()
   email!: string;
 
-  @ApiProperty({ example: 'UBA', required: false })
+  @ApiProperty({ required: false })
   bankName?: string;
 
-  @ApiProperty({ example: '1234567890', required: false })
+  @ApiProperty({ required: false })
   bankAccount?: string;
 }
 
 export class UnifiedTransactionResponseDto {
-  @ApiProperty({ example: 1 })
+  @ApiProperty()
   id!: number;
 
-  @ApiProperty({ example: '902A3' })
+  @ApiProperty()
   txId!: string;
 
-  @ApiProperty({ example: '0fdu14uuuzdyvplw1rawsflcubetcgc5znna' })
+  @ApiProperty()
   reference!: string;
 
   @ApiProperty({
     enum: ['INCOMING', 'OUTGOING', 'CONVERSION'],
-    example: 'OUTGOING',
   })
   type!: 'INCOMING' | 'OUTGOING' | 'CONVERSION';
 
   @ApiProperty({
     enum: ['BUY_SELL', 'WALLET_TRANSFER', 'FIAT_TRANSFER'],
-    example: 'WALLET_TRANSFER',
   })
   transactionCategory!: 'BUY_SELL' | 'WALLET_TRANSFER' | 'FIAT_TRANSFER';
 
-  @ApiProperty({ example: '2025-11-02T21:30:00Z' })
+  @ApiProperty()
   dateInitiated!: Date;
 
   @ApiProperty({ type: Object })
@@ -77,16 +75,15 @@ export class UnifiedTransactionResponseDto {
   @ApiProperty({ type: TransactionAmountDto })
   amount!: TransactionAmountDto;
 
-  @ApiProperty({ example: 2000, required: false })
+  @ApiProperty({ required: false })
   fee?: number;
 
   @ApiProperty({
     enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],
-    example: 'completed',
   })
   status!: string;
 
-  @ApiProperty({ example: false })
+  @ApiProperty()
   isFlagged!: boolean;
 
   @ApiProperty({ required: false })
@@ -104,19 +101,19 @@ export class UnifiedTransactionResponseDto {
   @ApiProperty({ type: TransactionSourceDestinationDto })
   destination!: TransactionSourceDestinationDto;
 
-  @ApiProperty({ example: '0x123...', required: false })
+  @ApiProperty({ required: false })
   txHash?: string;
 
-  @ApiProperty({ example: 'ethereum', required: false })
+  @ApiProperty({ required: false })
   network?: string;
 
   @ApiProperty({ type: TransactionMerchantDto, required: false })
   merchant?: TransactionMerchantDto;
 
-  @ApiProperty({ example: 'bank_transfer', required: false })
+  @ApiProperty({ required: false })
   paymentMethod?: string;
 
-  @ApiProperty({ example: 'https://example.com/proof.pdf', required: false })
+  @ApiProperty({ required: false })
   paymentProofUrl?: string;
 
   @ApiProperty({ required: false })
@@ -131,7 +128,7 @@ export class UnifiedTransactionResponseDto {
   @ApiProperty({ required: false })
   statusNotes?: string;
 
-  @ApiProperty({ example: '2025-11-02T21:30:00Z' })
+  @ApiProperty()
   createdAt!: Date;
 
   @ApiProperty({ required: false })
@@ -145,16 +142,16 @@ export class TransactionStatsResponseDto {
     fiat: number;
   };
 
-  @ApiProperty({ example: 12380 })
+  @ApiProperty()
   completed!: number;
 
-  @ApiProperty({ example: 3000 })
+  @ApiProperty()
   pending!: number;
 
-  @ApiProperty({ example: 3000 })
+  @ApiProperty()
   failed!: number;
 
-  @ApiProperty({ example: 3000 })
+  @ApiProperty()
   flagged!: number;
 
   @ApiProperty({ type: Object })
@@ -164,13 +161,13 @@ export class TransactionStatsResponseDto {
     conversion: number;
   };
 
-  @ApiProperty({ example: 3.5, required: false })
+  @ApiProperty({ required: false })
   pendingChange?: number;
 
-  @ApiProperty({ example: 3.5, required: false })
+  @ApiProperty({ required: false })
   failedChange?: number;
 
-  @ApiProperty({ example: 3.5, required: false })
+  @ApiProperty({ required: false })
   flaggedChange?: number;
 }
 

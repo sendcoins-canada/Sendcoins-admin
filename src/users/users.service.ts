@@ -15,19 +15,52 @@ export class UsersService {
     // Build where clause for filtering
     const where: Prisma.send_coin_userWhereInput = {};
 
+    // Collect all filter conditions
+    const conditions: Prisma.send_coin_userWhereInput[] = [];
+
     if (query.email) {
-      where.user_email = {
-        contains: query.email,
-        mode: 'insensitive',
-      };
+      conditions.push({
+        user_email: {
+          contains: query.email,
+          mode: 'insensitive',
+        },
+      });
     }
 
     if (query.country) {
-      where.country = query.country;
+      // Make country filter case-insensitive and also check country_iso2
+      // Use OR to match either country name or country_iso2 code
+      conditions.push({
+        OR: [
+          {
+            country: {
+              contains: query.country,
+              mode: 'insensitive',
+            },
+          },
+          {
+            country_iso2: {
+              contains: query.country,
+              mode: 'insensitive',
+            },
+          },
+        ],
+      });
     }
 
     if (query.accountBan !== undefined) {
-      where.account_ban = query.accountBan;
+      conditions.push({
+        account_ban: query.accountBan,
+      });
+    }
+
+    // Combine all conditions with AND
+    if (conditions.length > 0) {
+      if (conditions.length === 1) {
+        Object.assign(where, conditions[0]);
+      } else {
+        where.AND = conditions;
+      }
     }
 
     // Get total count for pagination

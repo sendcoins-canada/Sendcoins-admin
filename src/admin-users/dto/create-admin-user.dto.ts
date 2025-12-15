@@ -10,20 +10,19 @@ import { AdminRole } from '../../auth/roles.enum';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateAdminUserDto {
-  @ApiProperty({ example: 'Jane' })
+  @ApiProperty({ })
   @IsString()
   firstName!: string;
 
-  @ApiProperty({ example: 'Doe' })
+  @ApiProperty({ })
   @IsString()
   lastName!: string;
 
-  @ApiProperty({ example: 'jane.doe@example.com' })
+  @ApiProperty({ })
   @IsEmail()
   email!: string;
 
   @ApiProperty({
-    example: 1,
     required: false,
     description:
       'Department ID (optional). The department must exist in the database.',
@@ -35,7 +34,6 @@ export class CreateAdminUserDto {
 
   @ApiProperty({
     enum: AdminRole,
-    example: AdminRole.ENGINEER,
     description:
       'Legacy role enum. Required field, but ignored if roleId is provided. Use roleId for dynamic roles with permissions.',
   })
@@ -43,7 +41,6 @@ export class CreateAdminUserDto {
   role!: AdminRole;
 
   @ApiProperty({
-    example: 1,
     required: false,
     description:
       'Dynamic role ID (optional). If provided, takes precedence over the legacy role enum. The role must exist and be ACTIVE.',

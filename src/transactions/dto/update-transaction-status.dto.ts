@@ -15,14 +15,12 @@ export class UpdateTransactionStatusDto {
   @ApiProperty({
     description: 'New transaction status',
     enum: TransactionStatus,
-    example: TransactionStatus.COMPLETED,
   })
   @IsEnum(TransactionStatus)
   status!: TransactionStatus;
 
   @ApiProperty({
     description: 'Optional notes about the status change',
-    example: 'Payment verified and confirmed',
     required: false,
   })
   @IsOptional()

@@ -5,7 +5,6 @@ import { ApiProperty } from '@nestjs/swagger';
 export class GetUsersQueryDto {
   @ApiProperty({
     description: 'Page number (1-based)',
-    example: 1,
     required: false,
     default: 1,
   })
@@ -17,7 +16,6 @@ export class GetUsersQueryDto {
 
   @ApiProperty({
     description: 'Number of items per page (max 100)',
-    example: 20,
     required: false,
     default: 20,
   })
@@ -30,7 +28,6 @@ export class GetUsersQueryDto {
 
   @ApiProperty({
     description: 'Filter by email (partial match)',
-    example: 'user@example.com',
     required: false,
   })
   @IsOptional()
@@ -39,7 +36,6 @@ export class GetUsersQueryDto {
 
   @ApiProperty({
     description: 'Filter by country',
-    example: 'US',
     required: false,
   })
   @IsOptional()
@@ -48,7 +44,6 @@ export class GetUsersQueryDto {
 
   @ApiProperty({
     description: 'Filter by account ban status',
-    example: 'false',
     required: false,
     enum: ['true', 'false'],
   })

@@ -6,12 +6,12 @@ export class SetPasswordDto {
   @IsString()
   token!: string;
 
-  @ApiProperty({ minLength: 8, example: 'NewStr0ngP@ss!' })
+  @ApiProperty({ minLength: 8})
   @IsString()
   @MinLength(8)
   newPassword!: string;
 
-  @ApiProperty({ minLength: 8, example: 'NewStr0ngP@ss!' })
+  @ApiProperty({ minLength: 8})
   @IsString()
   @MinLength(8)
   confirmPassword!: string;

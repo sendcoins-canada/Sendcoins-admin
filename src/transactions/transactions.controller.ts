@@ -230,7 +230,7 @@ export class TransactionsController {
     schema: {
       type: 'object',
       properties: {
-        updated: { type: 'number', example: 5 },
+        updated: { type: 'number' },
         failed: {
           type: 'array',
           items: {
@@ -266,7 +266,7 @@ export class TransactionsController {
     schema: {
       type: 'object',
       properties: {
-        flagged: { type: 'number', example: 5 },
+        flagged: { type: 'number' },
         failed: {
           type: 'array',
           items: {
@@ -307,11 +307,10 @@ export class TransactionsController {
     status: 200,
     description: 'CSV file download',
     headers: {
-      'Content-Type': { schema: { type: 'string', example: 'text/csv' } },
+      'Content-Type': { schema: { type: 'string' } },
       'Content-Disposition': {
         schema: {
           type: 'string',
-          example: 'attachment; filename="transactions.csv"',
         },
       },
     },

@@ -35,8 +35,8 @@ export class UsersController {
     description:
       'Returns a paginated list of users from the send_coin_user table. Requires READ_USERS permission. Supports filtering by email, country, and account ban status.',
   })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'email', required: false, type: String })
   @ApiQuery({ name: 'country', required: false, type: String })
   @ApiQuery({
@@ -94,7 +94,6 @@ export class UsersController {
     name: 'id',
     type: Number,
     description: 'User ID (azer_id)',
-    example: 1,
   })
   @ApiResponse({
     status: 200,

@@ -43,7 +43,6 @@ export enum SortOrder {
 export class GetTransactionsDto {
   @ApiProperty({
     description: 'Page number (1-indexed)',
-    example: 1,
     required: false,
     minimum: 1,
     default: 1,
@@ -56,7 +55,6 @@ export class GetTransactionsDto {
 
   @ApiProperty({
     description: 'Number of items per page',
-    example: 20,
     required: false,
     minimum: 1,
     maximum: 100,
@@ -90,7 +88,6 @@ export class GetTransactionsDto {
 
   @ApiProperty({
     description: 'Filter by currency (crypto or fiat)',
-    example: 'BNB',
     required: false,
   })
   @IsOptional()
@@ -99,7 +96,6 @@ export class GetTransactionsDto {
 
   @ApiProperty({
     description: 'Filter by asset type',
-    example: 'crypto',
     required: false,
   })
   @IsOptional()
@@ -108,7 +104,6 @@ export class GetTransactionsDto {
 
   @ApiProperty({
     description: 'Filter by date from (ISO 8601 format)',
-    example: '2025-01-01T00:00:00Z',
     required: false,
   })
   @IsOptional()
@@ -117,7 +112,6 @@ export class GetTransactionsDto {
 
   @ApiProperty({
     description: 'Filter by date to (ISO 8601 format)',
-    example: '2025-12-31T23:59:59Z',
     required: false,
   })
   @IsOptional()
@@ -126,7 +120,6 @@ export class GetTransactionsDto {
 
   @ApiProperty({
     description: 'Filter by flagged status',
-    example: true,
     required: false,
   })
   @IsOptional()
@@ -136,7 +129,6 @@ export class GetTransactionsDto {
 
   @ApiProperty({
     description: 'Search by TX ID, reference, keychain, or user_api_key',
-    example: '902A3',
     required: false,
   })
   @IsOptional()

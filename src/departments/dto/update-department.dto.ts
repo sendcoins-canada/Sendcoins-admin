@@ -4,7 +4,6 @@ import { ApiProperty } from '@nestjs/swagger';
 export class UpdateDepartmentDto {
   @ApiProperty({
     description: 'Name of the department',
-    example: 'Engineering',
     maxLength: 100,
     required: false,
   })
@@ -15,7 +14,6 @@ export class UpdateDepartmentDto {
 
   @ApiProperty({
     description: 'Optional description of the department',
-    example: 'Handles product development and technical operations',
     required: false,
   })
   @IsOptional()

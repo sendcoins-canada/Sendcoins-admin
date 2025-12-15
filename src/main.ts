@@ -89,16 +89,9 @@ async function bootstrap() {
     }),
   );
 
-  // CORS
-  const corsOrigins = (
-    process.env.ADMIN_CORS_ORIGINS || 'http://localhost:4000'
-  )
-    .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean);
-
+  // CORS - Allow all origins
   app.enableCors({
-    origin: corsOrigins,
+    origin: true, // Allow all origins
     credentials: true,
   });
 

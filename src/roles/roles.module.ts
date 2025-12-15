@@ -11,3 +11,4 @@ import { PrismaModule } from '../prisma/prisma.module';
   exports: [RolesService],
 })
 export class RolesModule {}
+
