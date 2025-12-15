@@ -13,7 +13,6 @@ export class FlagTransactionDto {
 
   @ApiProperty({
     description: 'Reason for flagging the transaction',
-    example: 'Suspicious activity detected',
     required: false,
   })
   @IsOptional()

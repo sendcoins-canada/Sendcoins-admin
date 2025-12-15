@@ -13,7 +13,6 @@ export class ApproveTransactionDto {
 
   @ApiProperty({
     description: 'Optional notes about the approval',
-    example: 'Transaction approved after review',
     required: false,
   })
   @IsOptional()

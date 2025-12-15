@@ -20,3 +20,4 @@ CREATE INDEX IF NOT EXISTS "idx_transactions_is_flagged" ON "transaction_history
 -- CreateIndex: Add index on is_flagged for wallet_transfers
 CREATE INDEX IF NOT EXISTS "idx_wallet_transfers_is_flagged" ON "wallet_transfers"("is_flagged");
 
+

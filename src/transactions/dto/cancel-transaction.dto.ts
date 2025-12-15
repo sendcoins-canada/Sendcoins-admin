@@ -13,7 +13,6 @@ export class CancelTransactionDto {
 
   @ApiProperty({
     description: 'Reason for cancellation',
-    example: 'User requested cancellation',
     required: false,
   })
   @IsOptional()

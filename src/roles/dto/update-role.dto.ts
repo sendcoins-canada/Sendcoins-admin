@@ -12,7 +12,6 @@ import { RoleStatus } from '@prisma/client';
 export class UpdateRoleDto {
   @ApiProperty({
     description: 'Title/name of the role',
-    example: 'Compliance Officer',
     maxLength: 255,
     required: false,
   })
@@ -23,7 +22,6 @@ export class UpdateRoleDto {
 
   @ApiProperty({
     description: 'Optional description of the role',
-    example: 'Handles compliance and KYC verification',
     required: false,
   })
   @IsOptional()
@@ -42,7 +40,6 @@ export class UpdateRoleDto {
   @ApiProperty({
     description:
       'List of permissions granted to this role. Only these permissions will be granted; all others are denied by default.',
-    example: [Permission.READ_USERS, Permission.VERIFY_KYC],
     type: [String],
     enum: Permission,
     required: false,
@@ -52,3 +49,4 @@ export class UpdateRoleDto {
   @IsEnum(Permission, { each: true })
   permissions?: Permission[];
 }
+
