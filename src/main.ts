@@ -90,14 +90,8 @@ async function bootstrap() {
   );
 
   // CORS - Allow all origins
-  // Using a function that returns the origin directly (required when credentials: true)
   app.enableCors({
-    origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean | string) => void) {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
-      // Allow all origins - return the origin string so NestJS sets Access-Control-Allow-Origin header
-      callback(null, origin);
-    },
+    origin: true,
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
