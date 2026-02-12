@@ -103,6 +103,7 @@ async function bootstrap() {
     'http://localhost:5173',
     'http://localhost:3000',
     'https://sendcoinsfrontend.vercel.app',
+    'https://sendcoins-admin-frontend.vercel.app',
   ];
 
   app.enableCors({
