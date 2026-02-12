@@ -331,7 +331,7 @@ export class NotificationsService {
 
   /**
    * Send notification email based on type
-   * Routes to specific mail service methods for proper templates
+   * TODO: Implement specific email templates in MailService
    */
   private async sendNotificationEmail(
     email: string,
@@ -341,62 +341,18 @@ export class NotificationsService {
     message: string,
     metadata?: NotificationMetadata,
   ): Promise<boolean> {
-    const metaInfo = {
-      ipAddress: metadata?.ipAddress,
-      device: metadata?.device || metadata?.userAgent,
-      location: metadata?.location,
-    };
-
-    // Route to specific email methods based on notification type
-    switch (type) {
-      case AdminNotificationType.ADMIN_PASSWORD_CHANGED:
-        return this.mailService.sendPasswordChangedEmail(email, firstName, metaInfo);
-
-      case AdminNotificationType.NEW_IP_LOGIN:
-        return this.mailService.sendNewIpLoginEmail(email, firstName, metaInfo);
-
-      case AdminNotificationType.ADMIN_LOGIN_FAILED:
-      case AdminNotificationType.SUSPICIOUS_LOGIN_ATTEMPT:
-        return this.mailService.sendFailedLoginEmail(email, firstName, 3, metaInfo);
-
-      case AdminNotificationType.ADMIN_CREATED:
-        return this.mailService.sendAdminCreatedEmail(
-          email,
-          metadata?.adminName as string || 'New Admin',
-          metadata?.adminEmail as string || email,
-          metadata?.newRole as string,
-        );
-
-      case AdminNotificationType.ADMIN_DEACTIVATED:
-        return this.mailService.sendAdminDeactivatedEmail(
-          email,
-          firstName,
-          metadata?.adminEmail as string || 'Unknown',
-        );
-
-      case AdminNotificationType.TRANSACTION_FLAGGED:
-        return this.mailService.sendTransactionFlaggedEmail(email, firstName, {
-          alertType: 'flagged',
-          transactionRef: metadata?.transactionReference || 'N/A',
-          reason: message,
-        });
-
-      case AdminNotificationType.HIGH_VALUE_TRANSACTION:
-        return this.mailService.sendHighValueTransactionEmail(email, firstName, {
-          alertType: 'high_value',
-          transactionRef: metadata?.transactionReference || 'N/A',
-        });
-
-      // For other types, use the generic security alert email
-      default:
-        return this.mailService.sendSecurityAlertEmail(email, firstName, {
-          alertType: type.replace(/_/g, ' ').toLowerCase(),
-          title,
-          message,
-          ipAddress: metadata?.ipAddress,
-          device: metadata?.device || metadata?.userAgent,
-          location: metadata?.location,
-        });
+    // For now, send a generic notification email
+    // TODO: Add specific email templates to MailService
+    try {
+      return await this.mailService.send({
+        from: process.env.MAIL_FROM,
+        to: email,
+        subject: title,
+        text: `Hi ${firstName},\n\n${message}\n\n${metadata?.ipAddress ? `IP: ${metadata.ipAddress}` : ''}\n${metadata?.device ? `Device: ${metadata.device}` : ''}\n\nBest,\nSendCoins Team`,
+      });
+    } catch {
+      console.error(`Failed to send notification email to ${email}`);
+      return false;
     }
   }
 }
