@@ -30,8 +30,15 @@ export enum Permission {
   VIEW_DASHBOARD = 'VIEW_DASHBOARD',
   VIEW_ANALYTICS = 'VIEW_ANALYTICS',
 
+  // Platform management
+  MANAGE_PLATFORM = 'MANAGE_PLATFORM',
+
   // Data export
   EXPORT_DATA = 'EXPORT_DATA',
+
+  // Notifications
+  READ_NOTIFICATIONS = 'READ_NOTIFICATIONS',
+  MANAGE_NOTIFICATION_SETTINGS = 'MANAGE_NOTIFICATION_SETTINGS',
 }
 
 /**
@@ -121,10 +128,25 @@ export const PERMISSION_METADATA: Record<
     category: 'Dashboard & Analytics',
     description: 'Access detailed analytics and reports',
   },
+  [Permission.MANAGE_PLATFORM]: {
+    label: 'Manage platform',
+    category: 'Platform Management',
+    description: 'View platform balances, revenue, and settings',
+  },
   [Permission.EXPORT_DATA]: {
     label: 'Export data',
     category: 'Data Management',
     description: 'Export system data in various formats',
+  },
+  [Permission.READ_NOTIFICATIONS]: {
+    label: 'Read notifications',
+    category: 'Notifications',
+    description: 'View admin notifications',
+  },
+  [Permission.MANAGE_NOTIFICATION_SETTINGS]: {
+    label: 'Manage notification settings',
+    category: 'Notifications',
+    description: 'Configure notification preferences and settings',
   },
 };
 
