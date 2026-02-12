@@ -21,7 +21,13 @@ import {
   TransactionStatsResponseDto,
   PaginatedTransactionsResponseDto,
 } from './dto/transaction-response.dto';
-import { Prisma } from '@prisma/client';
+import {
+  Prisma,
+  AdminNotificationType,
+  AdminNotificationPriority,
+  Permission,
+} from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 
 // Types for transaction records
 type TransactionHistoryRecord = Prisma.transaction_historyGetPayload<{
@@ -47,7 +53,10 @@ interface TransactionFilter {
 
 @Injectable()
 export class TransactionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   /**
    * Get transaction statistics
@@ -478,6 +487,25 @@ export class TransactionsService {
           include: { merchants: true },
         });
 
+        // Notify admins with VERIFY_TRANSACTIONS permission
+        await this.notifications.notifyAdminsByPermission(
+          Permission.VERIFY_TRANSACTIONS,
+          AdminNotificationType.TRANSACTION_FLAGGED,
+          'Transaction Flagged for Review',
+          `Transaction ${transaction.reference} has been flagged by ${admin.email}. Reason: ${dto.reason}`,
+          {
+            priority: AdminNotificationPriority.HIGH,
+            metadata: {
+              transactionId: id,
+              transactionReference: transaction.reference,
+              flaggedBy: admin.email,
+              reason: dto.reason,
+            },
+            actionUrl: `/transactions/${id}`,
+            sendEmail: true,
+          },
+        );
+
         return this.transformHistoryTransaction(updated);
       }
     }
@@ -497,6 +525,25 @@ export class TransactionsService {
             flagged_reason: dto.reason,
           },
         });
+
+        // Notify admins with VERIFY_TRANSACTIONS permission
+        await this.notifications.notifyAdminsByPermission(
+          Permission.VERIFY_TRANSACTIONS,
+          AdminNotificationType.TRANSACTION_FLAGGED,
+          'Wallet Transfer Flagged for Review',
+          `Wallet transfer ${transaction.reference} has been flagged by ${admin.email}. Reason: ${dto.reason}`,
+          {
+            priority: AdminNotificationPriority.HIGH,
+            metadata: {
+              transactionId: id,
+              transactionReference: transaction.reference,
+              flaggedBy: admin.email,
+              reason: dto.reason,
+            },
+            actionUrl: `/transactions/${id}`,
+            sendEmail: true,
+          },
+        );
 
         return this.transformTransferTransaction(updated);
       }
@@ -518,6 +565,25 @@ export class TransactionsService {
             flagged_reason: dto.reason,
           },
         });
+
+        // Notify admins with VERIFY_TRANSACTIONS permission
+        await this.notifications.notifyAdminsByPermission(
+          Permission.VERIFY_TRANSACTIONS,
+          AdminNotificationType.TRANSACTION_FLAGGED,
+          'Fiat Transfer Flagged for Review',
+          `Fiat transfer ${transaction.reference} has been flagged by ${admin.email}. Reason: ${dto.reason}`,
+          {
+            priority: AdminNotificationPriority.HIGH,
+            metadata: {
+              transactionId: id,
+              transactionReference: transaction.reference,
+              flaggedBy: admin.email,
+              reason: dto.reason,
+            },
+            actionUrl: `/transactions/${id}`,
+            sendEmail: true,
+          },
+        );
 
         return this.transformFiatTransaction(updated);
       }
@@ -767,6 +833,18 @@ export class TransactionsService {
           include: { merchants: true },
         });
 
+        // Notify about verification
+        await this.notifications.notifyAdminsByPermission(
+          Permission.VERIFY_TRANSACTIONS,
+          AdminNotificationType.TRANSACTION_APPROVED,
+          'Transaction Verified',
+          `Transaction ${transaction.reference} has been verified by ${admin.email}.`,
+          {
+            metadata: { transactionId: id, transactionReference: transaction.reference, verifiedBy: admin.email },
+            sendEmail: false,
+          },
+        );
+
         return this.transformHistoryTransaction(updated);
       }
     }
@@ -791,6 +869,18 @@ export class TransactionsService {
           },
         });
 
+        // Notify about verification
+        await this.notifications.notifyAdminsByPermission(
+          Permission.VERIFY_TRANSACTIONS,
+          AdminNotificationType.TRANSACTION_APPROVED,
+          'Wallet Transfer Verified',
+          `Wallet transfer ${transaction.reference} has been verified by ${admin.email}.`,
+          {
+            metadata: { transactionId: id, transactionReference: transaction.reference, verifiedBy: admin.email },
+            sendEmail: false,
+          },
+        );
+
         return this.transformTransferTransaction(updated);
       }
     }
@@ -814,6 +904,18 @@ export class TransactionsService {
             updated_at: BigInt(Date.now()),
           },
         });
+
+        // Notify about verification
+        await this.notifications.notifyAdminsByPermission(
+          Permission.VERIFY_TRANSACTIONS,
+          AdminNotificationType.TRANSACTION_APPROVED,
+          'Fiat Transfer Verified',
+          `Fiat transfer ${transaction.reference} has been verified by ${admin.email}.`,
+          {
+            metadata: { transactionId: id, transactionReference: transaction.reference, verifiedBy: admin.email },
+            sendEmail: false,
+          },
+        );
 
         return this.transformFiatTransaction(updated);
       }
@@ -856,6 +958,18 @@ export class TransactionsService {
           include: { merchants: true },
         });
 
+        // Notify about approval
+        await this.notifications.notifyAdminsByPermission(
+          Permission.VERIFY_TRANSACTIONS,
+          AdminNotificationType.TRANSACTION_APPROVED,
+          'Transaction Approved',
+          `Transaction ${transaction.reference} has been approved by ${admin.email}.`,
+          {
+            metadata: { transactionId: id, transactionReference: transaction.reference, approvedBy: admin.email },
+            sendEmail: false,
+          },
+        );
+
         return this.transformHistoryTransaction(updated);
       }
     }
@@ -873,6 +987,18 @@ export class TransactionsService {
             updated_at: BigInt(Date.now()),
           },
         });
+
+        // Notify about approval
+        await this.notifications.notifyAdminsByPermission(
+          Permission.VERIFY_TRANSACTIONS,
+          AdminNotificationType.TRANSACTION_APPROVED,
+          'Wallet Transfer Approved',
+          `Wallet transfer ${transaction.reference} has been approved by ${admin.email}.`,
+          {
+            metadata: { transactionId: id, transactionReference: transaction.reference, approvedBy: admin.email },
+            sendEmail: false,
+          },
+        );
 
         return this.transformTransferTransaction(updated);
       }
@@ -895,6 +1021,18 @@ export class TransactionsService {
             updated_at: BigInt(Date.now()),
           },
         });
+
+        // Notify about approval
+        await this.notifications.notifyAdminsByPermission(
+          Permission.VERIFY_TRANSACTIONS,
+          AdminNotificationType.TRANSACTION_APPROVED,
+          'Fiat Transfer Approved',
+          `Fiat transfer ${transaction.reference} has been approved by ${admin.email}.`,
+          {
+            metadata: { transactionId: id, transactionReference: transaction.reference, approvedBy: admin.email },
+            sendEmail: false,
+          },
+        );
 
         return this.transformFiatTransaction(updated);
       }
@@ -937,6 +1075,18 @@ export class TransactionsService {
           include: { merchants: true },
         });
 
+        // Notify about cancellation
+        await this.notifications.notifyAdminsByPermission(
+          Permission.VERIFY_TRANSACTIONS,
+          AdminNotificationType.TRANSACTION_REJECTED,
+          'Transaction Cancelled',
+          `Transaction ${transaction.reference} has been cancelled by ${admin.email}. Reason: ${dto.reason || 'Not specified'}`,
+          {
+            metadata: { transactionId: id, transactionReference: transaction.reference, cancelledBy: admin.email, reason: dto.reason },
+            sendEmail: false,
+          },
+        );
+
         return this.transformHistoryTransaction(updated);
       }
     }
@@ -954,6 +1104,18 @@ export class TransactionsService {
             updated_at: BigInt(Date.now()),
           },
         });
+
+        // Notify about cancellation
+        await this.notifications.notifyAdminsByPermission(
+          Permission.VERIFY_TRANSACTIONS,
+          AdminNotificationType.TRANSACTION_REJECTED,
+          'Wallet Transfer Cancelled',
+          `Wallet transfer ${transaction.reference} has been cancelled by ${admin.email}. Reason: ${dto.reason || 'Not specified'}`,
+          {
+            metadata: { transactionId: id, transactionReference: transaction.reference, cancelledBy: admin.email, reason: dto.reason },
+            sendEmail: false,
+          },
+        );
 
         return this.transformTransferTransaction(updated);
       }
@@ -976,6 +1138,18 @@ export class TransactionsService {
             updated_at: BigInt(Date.now()),
           },
         });
+
+        // Notify about cancellation
+        await this.notifications.notifyAdminsByPermission(
+          Permission.VERIFY_TRANSACTIONS,
+          AdminNotificationType.TRANSACTION_REJECTED,
+          'Fiat Transfer Cancelled',
+          `Fiat transfer ${transaction.reference} has been cancelled by ${admin.email}. Reason: ${dto.reason || 'Not specified'}`,
+          {
+            metadata: { transactionId: id, transactionReference: transaction.reference, cancelledBy: admin.email, reason: dto.reason },
+            sendEmail: false,
+          },
+        );
 
         return this.transformFiatTransaction(updated);
       }

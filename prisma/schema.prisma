@@ -40,27 +40,29 @@ model AdminUser {
   firstName            String              @db.VarChar(100)
   lastName             String              @db.VarChar(100)
   profile              String?             @db.VarChar(255)
-  departmentId         Int?
   role                 AdminRole           @default(ENGINEER)
-  roleId               Int?
   status               AdminStatus         @default(ACTIVE)
   password             String              @db.VarChar(255)
-  passwordSet          Boolean             @default(false)
-  lastPasswordChangeAt DateTime?           @db.Timestamp(6)
-  lastLoginAt          DateTime?           @db.Timestamp(6)
-  mfaEnabled           Boolean             @default(false)
-  mfaSecret            String?             @db.VarChar(255)
-  mfaBackupCodes       Json?
-  lastMfaAt            DateTime?           @db.Timestamp(6)
-  allowedIps           Json?
-  deletedAt            DateTime?           @db.Timestamp(6)
   createdAt            DateTime            @default(now()) @db.Timestamp(6)
   updatedAt            DateTime            @updatedAt @db.Timestamp(6)
+  allowedIps           Json?
+  deletedAt            DateTime?           @db.Timestamp(6)
+  departmentId         Int?
+  lastLoginAt          DateTime?           @db.Timestamp(6)
+  lastMfaAt            DateTime?           @db.Timestamp(6)
+  lastPasswordChangeAt DateTime?           @db.Timestamp(6)
+  mfaBackupCodes       Json?
+  mfaEnabled           Boolean             @default(false)
+  mfaSecret            String?             @db.VarChar(255)
+  passwordSet          Boolean             @default(false)
+  roleId               Int?
+  lastLoginIp          String?             @db.VarChar(45)
+  notifications        AdminNotification[]
+  refreshTokens        AdminRefreshToken[]
   department           Department?         @relation(fields: [departmentId], references: [id])
   dynamicRole          Role?               @relation("AdminUserRole", fields: [roleId], references: [id])
   rolesCreated         Role[]              @relation("RoleCreatedBy")
   rolesLastUpdated     Role[]              @relation("RoleLastUpdatedBy")
-  refreshTokens        AdminRefreshToken[]
 }
 
 model Department {
@@ -97,6 +99,26 @@ model RolePermission {
 
   @@unique([roleId, permission])
   @@index([roleId])
+}
+
+model AdminNotification {
+  id        Int                       @id @default(autoincrement())
+  adminId   Int
+  type      AdminNotificationType
+  category  AdminNotificationCategory
+  priority  AdminNotificationPriority @default(NORMAL)
+  title     String                    @db.VarChar(200)
+  message   String
+  metadata  Json?                     @default("{}")
+  isRead    Boolean                   @default(false)
+  readAt    DateTime?                 @db.Timestamp(6)
+  actionUrl String?                   @db.VarChar(500)
+  emailSent Boolean                   @default(false)
+  createdAt DateTime                  @default(now()) @db.Timestamp(6)
+  admin     AdminUser                 @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId, isRead, createdAt(sort: Desc)])
+  @@index([adminId, category, createdAt(sort: Desc)])
 }
 
 model apple_user_names {
@@ -450,18 +472,19 @@ model merchants {
 }
 
 model otp_verifications {
-  id                   Int       @id @default(autoincrement())
-  email                String    @db.VarChar(255)
-  otp_code             String    @db.VarChar(6)
-  purpose              String    @db.VarChar(50)
-  auth_hash            String?   @unique @db.VarChar(100)
-  verified             Boolean?  @default(false)
-  created_at           BigInt
-  expires_at           BigInt
-  hash_expires_at      BigInt?
-  device               String?
-  used                 Boolean?  @default(false)
-  created_at_timestamp DateTime? @default(now()) @db.Timestamp(6)
+  id                      Int       @id @default(autoincrement())
+  email                   String    @db.VarChar(255)
+  otp_code                String    @db.VarChar(6)
+  purpose                 String    @db.VarChar(50)
+  auth_hash               String?   @unique @db.VarChar(100)
+  verified                Boolean?  @default(false)
+  created_at              BigInt
+  expires_at              BigInt
+  hash_expires_at         BigInt?
+  device                  String?
+  used                    Boolean?  @default(false)
+  created_at_timestamp    DateTime? @default(now()) @db.Timestamp(6)
+  temporary_passcode_hash String?   @db.VarChar(255)
 
   @@index([auth_hash], map: "idx_otp_auth_hash")
   @@index([email, purpose], map: "idx_otp_email_purpose")
@@ -656,13 +679,13 @@ model transaction_history {
   ip_address                String?    @db.VarChar(45)
   device                    String?
   location                  String?    @db.VarChar(255)
-  is_flagged                Boolean?   @default(false)
-  flagged_at                BigInt?
-  flagged_by                String?    @db.VarChar(255)
-  flagged_reason            String?
   created_at                BigInt
   updated_at                BigInt?
   created_at_timestamp      DateTime?  @default(now()) @db.Timestamp(6)
+  flagged_at                BigInt?
+  flagged_by                String?    @db.VarChar(255)
+  flagged_reason            String?
+  is_flagged                Boolean?   @default(false)
   merchants                 merchants? @relation(fields: [merchant_keychain], references: [keychain], map: "fk_merchant_keychain")
 
   @@index([asset_type], map: "idx_transactions_asset_type")
@@ -747,13 +770,13 @@ model wallet_transfers {
   metadata                 Json?
   ip_address               String?   @db.VarChar(45)
   device                   String?
-  is_flagged               Boolean?  @default(false)
-  flagged_at               BigInt?
-  flagged_by               String?   @db.VarChar(255)
-  flagged_reason           String?
   created_at               BigInt
   updated_at               BigInt?
   created_at_timestamp     DateTime? @default(now()) @db.Timestamp(6)
+  flagged_at               BigInt?
+  flagged_by               String?   @db.VarChar(255)
+  flagged_reason           String?
+  is_flagged               Boolean?  @default(false)
 
   @@index([reference], map: "idx_wallet_transfers_reference")
   @@index([status], map: "idx_wallet_transfers_status")
@@ -775,23 +798,34 @@ model fiat_bank_transfers {
   transit_number       String?   @db.VarChar(80)
   notes                String?
   status               String?   @default("pending") @db.VarChar(20)
-  status_updated_by    String?   @db.VarChar(255)
-  status_updated_at    BigInt?
-  status_notes         String?
-  is_flagged           Boolean?  @default(false)
-  flagged_at           BigInt?
-  flagged_by           String?   @db.VarChar(255)
-  flagged_reason       String?
   created_at           BigInt
-  updated_at           BigInt?
   created_at_timestamp DateTime? @default(now()) @db.Timestamp(6)
   ip_address           String?   @db.VarChar(45)
   device               String?
+  flagged_at           BigInt?
+  flagged_by           String?   @db.VarChar(255)
+  flagged_reason       String?
+  is_flagged           Boolean?  @default(false)
+  status_notes         String?
+  status_updated_at    BigInt?
+  status_updated_by    String?   @db.VarChar(255)
+  updated_at           BigInt?
 
   @@index([reference], map: "idx_fiat_transfers_ref")
   @@index([status], map: "idx_fiat_transfers_status")
   @@index([user_api_key, created_at(sort: Desc)], map: "idx_fiat_transfers_user")
   @@index([is_flagged], map: "idx_fiat_transfers_is_flagged")
+}
+
+model coin_azer_verify_user {
+  id              Int       @id @default(autoincrement())
+  user_api_key    String    @db.VarChar(255)
+  verification_id String    @db.VarChar(255)
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+
+  @@unique([user_api_key, verification_id], map: "unique_user_verification")
+  @@index([user_api_key], map: "idx_coin_azer_verify_user_api_key")
+  @@index([verification_id], map: "idx_coin_azer_verify_verification_id")
 }
 
 enum AdminRole {
@@ -822,10 +856,46 @@ enum Permission {
   MANAGE_DEPARTMENTS
   VIEW_DASHBOARD
   VIEW_ANALYTICS
+  MANAGE_PLATFORM
   EXPORT_DATA
+  READ_NOTIFICATIONS
+  MANAGE_NOTIFICATION_SETTINGS
 }
 
 enum RoleStatus {
   ACTIVE
   INACTIVE
+}
+
+enum AdminNotificationType {
+  ADMIN_LOGIN
+  ADMIN_LOGIN_FAILED
+  ADMIN_PASSWORD_CHANGED
+  SUSPICIOUS_LOGIN_ATTEMPT
+  NEW_IP_LOGIN
+  ADMIN_CREATED
+  ADMIN_DEACTIVATED
+  ADMIN_ROLE_CHANGED
+  TRANSACTION_FLAGGED
+  TRANSACTION_APPROVED
+  TRANSACTION_REJECTED
+  HIGH_VALUE_TRANSACTION
+  ROLE_CREATED
+  ROLE_UPDATED
+  ROLE_DELETED
+}
+
+enum AdminNotificationCategory {
+  SECURITY
+  ADMIN_MANAGEMENT
+  TRANSACTION
+  SYSTEM
+  ROLE_MANAGEMENT
+}
+
+enum AdminNotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
 }

@@ -192,4 +192,141 @@ export class UsersService {
 
     return user;
   }
+
+  async getStats() {
+    const [total, suspended, verified] = await Promise.all([
+      this.prisma.client.send_coin_user.count(),
+      this.prisma.client.send_coin_user.count({
+        where: { account_ban: 'true' },
+      }),
+      this.prisma.client.send_coin_user.count({
+        where: { verify_user: true },
+      }),
+    ]);
+
+    const active = total - suspended;
+    const pendingKyc = total - verified;
+
+    return {
+      total,
+      active,
+      suspended,
+      banned: suspended, // Using same value since account_ban covers both
+      pendingKyc,
+      verifiedKyc: verified,
+    };
+  }
+
+  async suspendUser(id: number, reason?: string) {
+    const user = await this.prisma.client.send_coin_user.findUnique({
+      where: { azer_id: id },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    if (user.account_ban === 'true') {
+      throw new NotFoundException('User is already suspended');
+    }
+
+    await this.prisma.client.send_coin_user.update({
+      where: { azer_id: id },
+      data: { account_ban: 'true' },
+    });
+
+    return { success: true, message: 'User suspended successfully' };
+  }
+
+  async unsuspendUser(id: number) {
+    const user = await this.prisma.client.send_coin_user.findUnique({
+      where: { azer_id: id },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    if (user.account_ban !== 'true') {
+      throw new NotFoundException('User is not suspended');
+    }
+
+    await this.prisma.client.send_coin_user.update({
+      where: { azer_id: id },
+      data: { account_ban: 'false' },
+    });
+
+    return { success: true, message: 'User unsuspended successfully' };
+  }
+
+  async getActivity(id: number, page = 1, limit = 10) {
+    const user = await this.prisma.client.send_coin_user.findUnique({
+      where: { azer_id: id },
+      select: {
+        azer_id: true,
+        last_login_at: true,
+        last_login_ip: true,
+        last_login_location: true,
+        timestamp: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    // Generate activity entries from available user data
+    // In a real implementation, you would have an activity log table
+    const activities: Array<{
+      id: string;
+      type: string;
+      action: string;
+      description: string;
+      ip?: string;
+      userAgent?: string;
+      metadata?: Record<string, unknown>;
+      createdAt: string;
+    }> = [];
+
+    // Add account creation activity
+    if (user.timestamp) {
+      activities.push({
+        id: `${user.azer_id}-create`,
+        type: 'PROFILE_UPDATE',
+        action: 'Account Created',
+        description: 'User account was created',
+        createdAt: user.timestamp.toISOString(),
+      });
+    }
+
+    // Add last login activity if available
+    if (user.last_login_at) {
+      activities.push({
+        id: `${user.azer_id}-login`,
+        type: 'LOGIN',
+        action: 'Login',
+        description: `User logged in from ${user.last_login_location || 'Unknown location'}`,
+        ip: user.last_login_ip || undefined,
+        createdAt: user.last_login_at.toISOString(),
+      });
+    }
+
+    // Sort by date descending
+    activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    // Paginate
+    const total = activities.length;
+    const start = (page - 1) * limit;
+    const data = activities.slice(start, start + limit);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
 }

@@ -1,6 +1,8 @@
 import {
   Controller,
   Get,
+  Post,
+  Body,
   UseGuards,
   Query,
   Param,
@@ -14,6 +16,7 @@ import {
   ApiTags,
   ApiOperation,
   ApiBearerAuth,
+  ApiBody,
   ApiQuery,
   ApiResponse,
   ApiParam,
@@ -81,6 +84,31 @@ export class UsersController {
   })
   async getAllUsers(@Query() query: GetUsersQueryDto) {
     return this.usersService.findAll(query);
+  }
+
+  @Get('stats')
+  @RequirePermission(Permission.READ_USERS)
+  @ApiOperation({
+    summary: 'Get user statistics',
+    description: 'Returns statistics about users including total, active, suspended, and KYC status counts.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User statistics',
+    schema: {
+      type: 'object',
+      properties: {
+        total: { type: 'number' },
+        active: { type: 'number' },
+        suspended: { type: 'number' },
+        banned: { type: 'number' },
+        pendingKyc: { type: 'number' },
+        verifiedKyc: { type: 'number' },
+      },
+    },
+  })
+  async getStats() {
+    return this.usersService.getStats();
   }
 
   @Get(':id')
@@ -152,5 +180,95 @@ export class UsersController {
   })
   async getUserById(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.findOne(id);
+  }
+
+  @Post(':id/suspend')
+  @RequirePermission(Permission.SUSPEND_USERS)
+  @ApiOperation({
+    summary: 'Suspend a user',
+    description: 'Suspend a user account, preventing them from logging in or making transactions.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'User ID (azer_id)',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        reason: { type: 'string', description: 'Reason for suspension' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User suspended successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async suspendUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { reason?: string },
+  ) {
+    return this.usersService.suspendUser(id, body.reason);
+  }
+
+  @Post(':id/unsuspend')
+  @RequirePermission(Permission.SUSPEND_USERS)
+  @ApiOperation({
+    summary: 'Unsuspend a user',
+    description: 'Unsuspend a previously suspended user account.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'User ID (azer_id)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User unsuspended successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async unsuspendUser(@Param('id', ParseIntPipe) id: number) {
+    return this.usersService.unsuspendUser(id);
+  }
+
+  @Get(':id/activity')
+  @RequirePermission(Permission.READ_USERS)
+  @ApiOperation({
+    summary: 'Get user activity',
+    description: 'Get the activity log for a specific user.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'User ID (azer_id)',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({
+    status: 200,
+    description: 'User activity log',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async getUserActivity(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.usersService.getActivity(
+      id,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 10,
+    );
   }
 }
