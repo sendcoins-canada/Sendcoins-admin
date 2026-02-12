@@ -66,6 +66,7 @@ async function bootstrap() {
   );
 
   // Security headers with CSP configured for Swagger UI CDN assets
+  // Note: This CSP only applies to backend API responses, not frontend pages
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -73,25 +74,50 @@ async function bootstrap() {
           defaultSrc: ["'self'"],
           styleSrc: [
             "'self'",
-            "'unsafe-inline'", // Swagger UI may need inline styles
+            "'unsafe-inline'", // Swagger UI and Monaco Editor may need inline styles
             'https://cdnjs.cloudflare.com',
+            'https://cdn.jsdelivr.net', // Monaco Editor CDN
+            'https://fonts.googleapis.com', // Google Fonts
           ],
           scriptSrc: [
             "'self'",
             "'unsafe-inline'", // Swagger UI initialization script
+            "'unsafe-eval'", // Monaco Editor may need eval
             'https://cdnjs.cloudflare.com',
+            'https://cdn.jsdelivr.net', // Monaco Editor CDN
+          ],
+          workerSrc: [
+            "'self'",
+            'blob:', // Monaco Editor web workers
           ],
           imgSrc: ["'self'", 'data:', 'https:'],
           connectSrc: ["'self'"],
-          fontSrc: ["'self'", 'https:', 'data:'],
+          fontSrc: ["'self'", 'https:', 'data:', 'https://fonts.gstatic.com'],
         },
       },
     }),
   );
 
-  // CORS - Allow all origins
+  // CORS - Allow specific origins
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://sendcoinsfrontend.vercel.app',
+  ];
+
   app.enableCors({
-    origin: true,
+    origin: (origin: string | undefined, callback: (err: Error | null, origin?: string | boolean) => void) => {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, origin);
+      }
+      // For development, allow all origins
+      if (process.env.NODE_ENV !== 'production') {
+        return callback(null, origin);
+      }
+      return callback(null, false);
+    },
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
