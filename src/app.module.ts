@@ -12,6 +12,11 @@ import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PlatformModule } from './platform/platform.module';
+import { WalletsModule } from './wallets/wallets.module';
+import { KycModule } from './kyc/kyc.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { ConversionsModule } from './conversions/conversions.module';
 // import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { GlobalAuthGuard } from './auth/global-auth.guard';
@@ -29,6 +34,11 @@ import { GlobalAuthGuard } from './auth/global-auth.guard';
     TransactionsModule,
     NotificationsModule,
     PlatformModule,
+    WalletsModule,
+    KycModule,
+    DashboardModule,
+    AnalyticsModule,
+    ConversionsModule,
     // ThrottlerModule.forRoot([
     //   {
     //     ttl: 60_000,

@@ -840,7 +840,11 @@ export class TransactionsService {
           'Transaction Verified',
           `Transaction ${transaction.reference} has been verified by ${admin.email}.`,
           {
-            metadata: { transactionId: id, transactionReference: transaction.reference, verifiedBy: admin.email },
+            metadata: {
+              transactionId: id,
+              transactionReference: transaction.reference,
+              verifiedBy: admin.email,
+            },
             sendEmail: false,
           },
         );
@@ -876,7 +880,11 @@ export class TransactionsService {
           'Wallet Transfer Verified',
           `Wallet transfer ${transaction.reference} has been verified by ${admin.email}.`,
           {
-            metadata: { transactionId: id, transactionReference: transaction.reference, verifiedBy: admin.email },
+            metadata: {
+              transactionId: id,
+              transactionReference: transaction.reference,
+              verifiedBy: admin.email,
+            },
             sendEmail: false,
           },
         );
@@ -912,7 +920,11 @@ export class TransactionsService {
           'Fiat Transfer Verified',
           `Fiat transfer ${transaction.reference} has been verified by ${admin.email}.`,
           {
-            metadata: { transactionId: id, transactionReference: transaction.reference, verifiedBy: admin.email },
+            metadata: {
+              transactionId: id,
+              transactionReference: transaction.reference,
+              verifiedBy: admin.email,
+            },
             sendEmail: false,
           },
         );
@@ -965,7 +977,11 @@ export class TransactionsService {
           'Transaction Approved',
           `Transaction ${transaction.reference} has been approved by ${admin.email}.`,
           {
-            metadata: { transactionId: id, transactionReference: transaction.reference, approvedBy: admin.email },
+            metadata: {
+              transactionId: id,
+              transactionReference: transaction.reference,
+              approvedBy: admin.email,
+            },
             sendEmail: false,
           },
         );
@@ -995,7 +1011,11 @@ export class TransactionsService {
           'Wallet Transfer Approved',
           `Wallet transfer ${transaction.reference} has been approved by ${admin.email}.`,
           {
-            metadata: { transactionId: id, transactionReference: transaction.reference, approvedBy: admin.email },
+            metadata: {
+              transactionId: id,
+              transactionReference: transaction.reference,
+              approvedBy: admin.email,
+            },
             sendEmail: false,
           },
         );
@@ -1029,7 +1049,11 @@ export class TransactionsService {
           'Fiat Transfer Approved',
           `Fiat transfer ${transaction.reference} has been approved by ${admin.email}.`,
           {
-            metadata: { transactionId: id, transactionReference: transaction.reference, approvedBy: admin.email },
+            metadata: {
+              transactionId: id,
+              transactionReference: transaction.reference,
+              approvedBy: admin.email,
+            },
             sendEmail: false,
           },
         );
@@ -1082,7 +1106,12 @@ export class TransactionsService {
           'Transaction Cancelled',
           `Transaction ${transaction.reference} has been cancelled by ${admin.email}. Reason: ${dto.reason || 'Not specified'}`,
           {
-            metadata: { transactionId: id, transactionReference: transaction.reference, cancelledBy: admin.email, reason: dto.reason },
+            metadata: {
+              transactionId: id,
+              transactionReference: transaction.reference,
+              cancelledBy: admin.email,
+              reason: dto.reason,
+            },
             sendEmail: false,
           },
         );
@@ -1112,7 +1141,12 @@ export class TransactionsService {
           'Wallet Transfer Cancelled',
           `Wallet transfer ${transaction.reference} has been cancelled by ${admin.email}. Reason: ${dto.reason || 'Not specified'}`,
           {
-            metadata: { transactionId: id, transactionReference: transaction.reference, cancelledBy: admin.email, reason: dto.reason },
+            metadata: {
+              transactionId: id,
+              transactionReference: transaction.reference,
+              cancelledBy: admin.email,
+              reason: dto.reason,
+            },
             sendEmail: false,
           },
         );
@@ -1146,7 +1180,12 @@ export class TransactionsService {
           'Fiat Transfer Cancelled',
           `Fiat transfer ${transaction.reference} has been cancelled by ${admin.email}. Reason: ${dto.reason || 'Not specified'}`,
           {
-            metadata: { transactionId: id, transactionReference: transaction.reference, cancelledBy: admin.email, reason: dto.reason },
+            metadata: {
+              transactionId: id,
+              transactionReference: transaction.reference,
+              cancelledBy: admin.email,
+              reason: dto.reason,
+            },
             sendEmail: false,
           },
         );

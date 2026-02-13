@@ -83,8 +83,7 @@ export class PlatformService {
           totalFeesCollected: String(account.total_fees_collected || 0),
           totalPaidOut: String(account.total_paid_out || 0),
           netProfit: String(
-            (account.total_fees_collected || 0) -
-              (account.total_paid_out || 0),
+            (account.total_fees_collected || 0) - (account.total_paid_out || 0),
           ),
           status: account.status,
           totalTransactions: 0,
@@ -139,7 +138,8 @@ export class PlatformService {
         query += ' AND ' + conditions.join(' AND ');
       }
 
-      query += ' GROUP BY transaction_type, currency ORDER BY total_amount DESC';
+      query +=
+        ' GROUP BY transaction_type, currency ORDER BY total_amount DESC';
 
       const result = await this.prisma.client.$queryRawUnsafe<
         Array<{

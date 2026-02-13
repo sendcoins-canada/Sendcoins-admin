@@ -312,7 +312,10 @@ export class UsersService {
     }
 
     // Sort by date descending
-    activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    activities.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
 
     // Paginate
     const total = activities.length;

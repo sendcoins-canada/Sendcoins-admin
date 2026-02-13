@@ -54,7 +54,10 @@ export interface PaginatedNotificationsResponse {
 }
 
 // Map notification types to categories
-const TYPE_TO_CATEGORY: Record<AdminNotificationType, AdminNotificationCategory> = {
+const TYPE_TO_CATEGORY: Record<
+  AdminNotificationType,
+  AdminNotificationCategory
+> = {
   ADMIN_LOGIN: AdminNotificationCategory.SECURITY,
   ADMIN_LOGIN_FAILED: AdminNotificationCategory.SECURITY,
   ADMIN_PASSWORD_CHANGED: AdminNotificationCategory.SECURITY,

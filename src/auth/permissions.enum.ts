@@ -149,4 +149,3 @@ export const PERMISSION_METADATA: Record<
     description: 'Configure notification preferences and settings',
   },
 };
-

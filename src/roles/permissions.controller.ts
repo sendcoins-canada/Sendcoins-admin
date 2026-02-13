@@ -22,9 +22,9 @@ export class PermissionsController {
           items: {
             type: 'object',
             properties: {
-              value: { type: 'string'},
-              label: { type: 'string'},
-              category: { type: 'string'},
+              value: { type: 'string' },
+              label: { type: 'string' },
+              category: { type: 'string' },
             },
           },
         },

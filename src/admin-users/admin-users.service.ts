@@ -2,9 +2,12 @@ import {
   Injectable,
   BadRequestException,
   ConflictException,
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
+import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
+import { GetAdminUsersQueryDto } from './dto/get-admin-users-query.dto';
 import { MailService } from '../mail/mail.service';
 import { AdminStatus, RoleStatus, Prisma } from '@prisma/client';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
@@ -180,5 +183,314 @@ export class AdminUsersService {
     });
 
     return { success: true };
+  }
+
+  async findAll(query: GetAdminUsersQueryDto) {
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      status,
+      role,
+      roleId,
+      departmentId,
+    } = query;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.AdminUserWhereInput = {};
+
+    if (search) {
+      where.OR = [
+        { email: { contains: search, mode: 'insensitive' } },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (role) {
+      where.role = role;
+    }
+
+    if (roleId) {
+      where.roleId = roleId;
+    }
+
+    if (departmentId) {
+      where.departmentId = departmentId;
+    }
+
+    const [admins, total] = await Promise.all([
+      this.prisma.client.adminUser.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          department: true,
+          dynamicRole: {
+            include: {
+              permissions: true,
+            },
+          },
+        },
+      }),
+      this.prisma.client.adminUser.count({ where }),
+    ]);
+
+    return {
+      admins: admins.map((admin) => ({
+        id: admin.id,
+        email: admin.email,
+        firstName: admin.firstName,
+        lastName: admin.lastName,
+        status: admin.status,
+        role: admin.role,
+        roleId: admin.roleId,
+        dynamicRole: admin.dynamicRole
+          ? {
+              id: admin.dynamicRole.id,
+              title: admin.dynamicRole.title,
+              status: admin.dynamicRole.status,
+              permissions: admin.dynamicRole.permissions.map(
+                (rp) => rp.permission,
+              ),
+            }
+          : null,
+        departmentId: admin.departmentId,
+        department: admin.department
+          ? {
+              id: admin.department.id,
+              name: admin.department.name,
+            }
+          : null,
+        passwordSet: admin.passwordSet,
+        createdAt: admin.createdAt,
+        updatedAt: admin.updatedAt,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findOne(id: number) {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id },
+      include: {
+        department: true,
+        dynamicRole: {
+          include: {
+            permissions: true,
+          },
+        },
+      },
+    });
+
+    if (!admin) {
+      throw new NotFoundException(`Admin user with ID ${id} not found`);
+    }
+
+    return {
+      id: admin.id,
+      email: admin.email,
+      firstName: admin.firstName,
+      lastName: admin.lastName,
+      status: admin.status,
+      role: admin.role,
+      roleId: admin.roleId,
+      dynamicRole: admin.dynamicRole
+        ? {
+            id: admin.dynamicRole.id,
+            title: admin.dynamicRole.title,
+            status: admin.dynamicRole.status,
+            permissions: admin.dynamicRole.permissions.map(
+              (rp) => rp.permission,
+            ),
+          }
+        : null,
+      departmentId: admin.departmentId,
+      department: admin.department
+        ? {
+            id: admin.department.id,
+            name: admin.department.name,
+            description: admin.department.description,
+          }
+        : null,
+      passwordSet: admin.passwordSet,
+      createdAt: admin.createdAt,
+      updatedAt: admin.updatedAt,
+    };
+  }
+
+  async update(id: number, dto: UpdateAdminUserDto, actorId: number) {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id },
+    });
+
+    if (!admin) {
+      throw new NotFoundException(`Admin user with ID ${id} not found`);
+    }
+
+    // If roleId is provided, verify it exists and is ACTIVE
+    if (dto.roleId) {
+      const role = await this.prisma.client.role.findUnique({
+        where: { id: dto.roleId },
+      });
+      if (!role) {
+        throw new BadRequestException(`Role with ID ${dto.roleId} not found`);
+      }
+      if (role.status !== RoleStatus.ACTIVE) {
+        throw new BadRequestException(
+          `Cannot assign inactive role. The role "${role.title}" is ${role.status}.`,
+        );
+      }
+    }
+
+    // If departmentId is provided (and not null), verify it exists
+    if (dto.departmentId !== undefined && dto.departmentId !== null) {
+      const department = await this.prisma.client.department.findUnique({
+        where: { id: dto.departmentId },
+      });
+      if (!department) {
+        throw new BadRequestException(
+          `Department with ID ${dto.departmentId} not found`,
+        );
+      }
+    }
+
+    const updateData: Prisma.AdminUserUpdateInput = {};
+
+    if (dto.firstName !== undefined) updateData.firstName = dto.firstName;
+    if (dto.lastName !== undefined) updateData.lastName = dto.lastName;
+    if (dto.role !== undefined) updateData.role = dto.role;
+    if (dto.roleId !== undefined) {
+      updateData.dynamicRole = dto.roleId
+        ? { connect: { id: dto.roleId } }
+        : { disconnect: true };
+    }
+    if (dto.departmentId !== undefined) {
+      updateData.department = dto.departmentId
+        ? { connect: { id: dto.departmentId } }
+        : { disconnect: true };
+    }
+
+    const updated = await this.prisma.client.adminUser.update({
+      where: { id },
+      data: updateData,
+      include: {
+        department: true,
+        dynamicRole: {
+          include: {
+            permissions: true,
+          },
+        },
+      },
+    });
+
+    await this.audit.log('ADMIN_UPDATED', actorId, id, {
+      changes: dto,
+    });
+
+    return {
+      id: updated.id,
+      email: updated.email,
+      firstName: updated.firstName,
+      lastName: updated.lastName,
+      status: updated.status,
+      role: updated.role,
+      roleId: updated.roleId,
+      dynamicRole: updated.dynamicRole
+        ? {
+            id: updated.dynamicRole.id,
+            title: updated.dynamicRole.title,
+            status: updated.dynamicRole.status,
+            permissions: updated.dynamicRole.permissions.map(
+              (rp) => rp.permission,
+            ),
+          }
+        : null,
+      departmentId: updated.departmentId,
+      department: updated.department
+        ? {
+            id: updated.department.id,
+            name: updated.department.name,
+          }
+        : null,
+      passwordSet: updated.passwordSet,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+    };
+  }
+
+  async deactivate(id: number, actorId: number) {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id },
+    });
+
+    if (!admin) {
+      throw new NotFoundException(`Admin user with ID ${id} not found`);
+    }
+
+    if (admin.status === AdminStatus.INACTIVE) {
+      throw new BadRequestException('Admin user is already deactivated');
+    }
+
+    // Prevent self-deactivation
+    if (admin.id === actorId) {
+      throw new BadRequestException('You cannot deactivate your own account');
+    }
+
+    const updated = await this.prisma.client.adminUser.update({
+      where: { id },
+      data: { status: AdminStatus.INACTIVE },
+    });
+
+    await this.audit.log('ADMIN_DEACTIVATED', actorId, id, {
+      email: admin.email,
+    });
+
+    return {
+      id: updated.id,
+      email: updated.email,
+      status: updated.status,
+      message: 'Admin user has been deactivated',
+    };
+  }
+
+  async reactivate(id: number, actorId: number) {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id },
+    });
+
+    if (!admin) {
+      throw new NotFoundException(`Admin user with ID ${id} not found`);
+    }
+
+    if (admin.status === AdminStatus.ACTIVE) {
+      throw new BadRequestException('Admin user is already active');
+    }
+
+    const updated = await this.prisma.client.adminUser.update({
+      where: { id },
+      data: { status: AdminStatus.ACTIVE },
+    });
+
+    await this.audit.log('ADMIN_REACTIVATED', actorId, id, {
+      email: admin.email,
+    });
+
+    return {
+      id: updated.id,
+      email: updated.email,
+      status: updated.status,
+      message: 'Admin user has been reactivated',
+    };
   }
 }

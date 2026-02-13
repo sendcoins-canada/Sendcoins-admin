@@ -56,7 +56,7 @@ export class AdminAuthController {
       properties: {
         accessToken: { type: 'string' },
         refreshToken: { type: 'string' },
-        expiresIn: { type: 'string'},
+        expiresIn: { type: 'string' },
         admin: { type: 'object' },
       },
     },
@@ -110,7 +110,7 @@ export class AdminAuthController {
       properties: {
         accessToken: { type: 'string' },
         refreshToken: { type: 'string' },
-        expiresIn: { type: 'string'},
+        expiresIn: { type: 'string' },
         admin: { type: 'object' },
       },
     },

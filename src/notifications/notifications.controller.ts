@@ -70,7 +70,10 @@ export class NotificationsController {
     @Req() req: AuthenticatedRequest,
     @Body() dto: MarkNotificationsReadDto,
   ) {
-    return this.notificationsService.markAsRead(req.user.id, dto.notificationIds);
+    return this.notificationsService.markAsRead(
+      req.user.id,
+      dto.notificationIds,
+    );
   }
 
   @Patch('read-all')

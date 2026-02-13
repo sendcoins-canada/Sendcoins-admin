@@ -90,7 +90,8 @@ export class UsersController {
   @RequirePermission(Permission.READ_USERS)
   @ApiOperation({
     summary: 'Get user statistics',
-    description: 'Returns statistics about users including total, active, suspended, and KYC status counts.',
+    description:
+      'Returns statistics about users including total, active, suspended, and KYC status counts.',
   })
   @ApiResponse({
     status: 200,
@@ -186,7 +187,8 @@ export class UsersController {
   @RequirePermission(Permission.SUSPEND_USERS)
   @ApiOperation({
     summary: 'Suspend a user',
-    description: 'Suspend a user account, preventing them from logging in or making transactions.',
+    description:
+      'Suspend a user account, preventing them from logging in or making transactions.',
   })
   @ApiParam({
     name: 'id',

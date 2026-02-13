@@ -10,15 +10,15 @@ import { AdminRole } from '../../auth/roles.enum';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateAdminUserDto {
-  @ApiProperty({ })
+  @ApiProperty({})
   @IsString()
   firstName!: string;
 
-  @ApiProperty({ })
+  @ApiProperty({})
   @IsString()
   lastName!: string;
 
-  @ApiProperty({ })
+  @ApiProperty({})
   @IsEmail()
   email!: string;
 
