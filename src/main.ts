@@ -98,37 +98,8 @@ async function bootstrap() {
     }),
   );
 
-  // CORS - Allow specific origins
-  const envOrigins = process.env.CORS_ORIGINS?.split(',').map((o) => o.trim()) || [];
-  const allowedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'https://sendcoinsfrontend.vercel.app',
-    'https://sendcoins-admin-frontend.vercel.app',
-    ...envOrigins,
-  ];
-
-  app.enableCors({
-    origin: (
-      origin: string | undefined,
-      callback: (err: Error | null, origin?: string | boolean) => void,
-    ) => {
-      // Allow requests with no origin (mobile apps, curl, etc.)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, origin);
-      }
-      // For development, allow all origins
-      if (process.env.NODE_ENV !== 'production') {
-        return callback(null, origin);
-      }
-      return callback(null, false);
-    },
-    credentials: true,
-    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-    exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  });
+  // CORS - Allow all origins
+  app.enableCors();
 
   // Protect Swagger with HTTP Basic Auth in production (before Swagger setup)
   if (process.env.NODE_ENV === 'production') {
