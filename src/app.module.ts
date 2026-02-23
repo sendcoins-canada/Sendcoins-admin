@@ -17,6 +17,9 @@ import { KycModule } from './kyc/kyc.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { ConversionsModule } from './conversions/conversions.module';
+import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
+import { MerchantsModule } from './merchants/merchants.module';
+import { SettingsModule } from './settings/settings.module';
 // import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { GlobalAuthGuard } from './auth/global-auth.guard';
@@ -39,6 +42,9 @@ import { GlobalAuthGuard } from './auth/global-auth.guard';
     DashboardModule,
     AnalyticsModule,
     ConversionsModule,
+    BankAccountsModule,
+    MerchantsModule,
+    SettingsModule,
     // ThrottlerModule.forRoot([
     //   {
     //     ttl: 60_000,

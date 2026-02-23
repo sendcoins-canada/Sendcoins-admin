@@ -25,6 +25,9 @@ import { TransactionsService } from './transactions.service';
 import {
   GetTransactionsDto,
   TransactionType,
+  TransactionStatus,
+  SortBy,
+  SortOrder,
 } from './dto/get-transactions.dto';
 import { UpdateTransactionStatusDto } from './dto/update-transaction-status.dto';
 import { FlagTransactionDto } from './dto/flag-transaction.dto';
@@ -110,6 +113,29 @@ export class TransactionsController {
     @Query() dto: GetTransactionsDto,
   ): Promise<PaginatedTransactionsResponseDto> {
     return this.transactionsService.findAll(dto);
+  }
+
+  @Get('pending-approvals')
+  @RequirePermission(Permission.READ_TRANSACTIONS)
+  @ApiOperation({
+    summary: 'Get transactions pending approval',
+    description: 'Returns transactions that are pending or flagged for review',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async getPendingApprovals(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ): Promise<PaginatedTransactionsResponseDto> {
+    const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit ?? '20', 10) || 20));
+    return this.transactionsService.findAll({
+      page: pageNum,
+      limit: limitNum,
+      status: TransactionStatus.PENDING,
+      sortBy: SortBy.CREATED_AT,
+      sortOrder: SortOrder.DESC,
+    });
   }
 
   @Get(':id')

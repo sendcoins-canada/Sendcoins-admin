@@ -98,4 +98,21 @@ export class NotificationsController {
   ) {
     return this.notificationsService.delete(req.user.id, dto.notificationIds);
   }
+
+  @Get('preferences')
+  @ApiOperation({ summary: 'Get notification preferences' })
+  @ApiResponse({ status: 200, description: 'Notification preferences' })
+  async getPreferences(@Req() req: AuthenticatedRequest) {
+    return this.notificationsService.getPreferences(req.user.id);
+  }
+
+  @Patch('preferences')
+  @ApiOperation({ summary: 'Update notification preferences' })
+  @ApiResponse({ status: 200, description: 'Updated preferences' })
+  async updatePreferences(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: { email?: boolean; push?: boolean; categories?: Record<string, boolean> },
+  ) {
+    return this.notificationsService.updatePreferences(req.user.id, body);
+  }
 }

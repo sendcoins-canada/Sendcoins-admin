@@ -333,6 +333,39 @@ export class NotificationsService {
   }
 
   /**
+   * Get notification preferences for an admin (stub: returns defaults)
+   */
+  async getPreferences(
+    _adminId: number,
+  ): Promise<{ email: boolean; push: boolean; categories: Record<string, boolean> }> {
+    return {
+      email: true,
+      push: true,
+      categories: {
+        SECURITY: true,
+        TRANSACTION: true,
+        ADMIN_MANAGEMENT: true,
+        ROLE_MANAGEMENT: true,
+      },
+    };
+  }
+
+  /**
+   * Update notification preferences (stub: accepts and echoes back)
+   */
+  async updatePreferences(
+    _adminId: number,
+    body: { email?: boolean; push?: boolean; categories?: Record<string, boolean> },
+  ): Promise<{ email: boolean; push: boolean; categories: Record<string, boolean> }> {
+    const current = await this.getPreferences(_adminId);
+    return {
+      email: body.email ?? current.email,
+      push: body.push ?? current.push,
+      categories: { ...current.categories, ...body.categories },
+    };
+  }
+
+  /**
    * Send notification email based on type
    * TODO: Implement specific email templates in MailService
    */

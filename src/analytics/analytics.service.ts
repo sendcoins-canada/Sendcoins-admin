@@ -58,15 +58,26 @@ export class AnalyticsService {
       ORDER BY ${dateGrouping}
     `;
 
-    const volumeData = await this.prisma.client.$queryRawUnsafe<
-      Array<{
-        period: string;
-        transaction_count: bigint;
-        completed_count: bigint;
-        total_volume: string;
-        completed_volume: string;
-      }>
-    >(volumeQuery, ...params);
+    // Pass parameters correctly - if params array is empty, don't spread it
+    const volumeData = params.length > 0
+      ? await this.prisma.client.$queryRawUnsafe<
+          Array<{
+            period: string;
+            transaction_count: bigint;
+            completed_count: bigint;
+            total_volume: string;
+            completed_volume: string;
+          }>
+        >(volumeQuery, ...params)
+      : await this.prisma.client.$queryRawUnsafe<
+          Array<{
+            period: string;
+            transaction_count: bigint;
+            completed_count: bigint;
+            total_volume: string;
+            completed_volume: string;
+          }>
+        >(volumeQuery);
 
     // Transaction by type
     const typeQuery = `
@@ -80,9 +91,13 @@ export class AnalyticsService {
       ORDER BY count DESC
     `;
 
-    const typeData = await this.prisma.client.$queryRawUnsafe<
-      Array<{ transaction_type: string | null; count: bigint; volume: string }>
-    >(typeQuery, ...params);
+    const typeData = params.length > 0
+      ? await this.prisma.client.$queryRawUnsafe<
+          Array<{ transaction_type: string | null; count: bigint; volume: string }>
+        >(typeQuery, ...params)
+      : await this.prisma.client.$queryRawUnsafe<
+          Array<{ transaction_type: string | null; count: bigint; volume: string }>
+        >(typeQuery);
 
     // Transaction by status
     const statusQuery = `
@@ -95,9 +110,13 @@ export class AnalyticsService {
       ORDER BY count DESC
     `;
 
-    const statusData = await this.prisma.client.$queryRawUnsafe<
-      Array<{ status: string | null; count: bigint }>
-    >(statusQuery, ...params);
+    const statusData = params.length > 0
+      ? await this.prisma.client.$queryRawUnsafe<
+          Array<{ status: string | null; count: bigint }>
+        >(statusQuery, ...params)
+      : await this.prisma.client.$queryRawUnsafe<
+          Array<{ status: string | null; count: bigint }>
+        >(statusQuery);
 
     // Transaction by currency
     const currencyQuery = `
@@ -112,14 +131,23 @@ export class AnalyticsService {
       ORDER BY count DESC
     `;
 
-    const currencyData = await this.prisma.client.$queryRawUnsafe<
-      Array<{
-        crypto_type: string | null;
-        count: bigint;
-        crypto_volume: string;
-        fiat_volume: string;
-      }>
-    >(currencyQuery, ...params);
+    const currencyData = params.length > 0
+      ? await this.prisma.client.$queryRawUnsafe<
+          Array<{
+            crypto_type: string | null;
+            count: bigint;
+            crypto_volume: string;
+            fiat_volume: string;
+          }>
+        >(currencyQuery, ...params)
+      : await this.prisma.client.$queryRawUnsafe<
+          Array<{
+            crypto_type: string | null;
+            count: bigint;
+            crypto_volume: string;
+            fiat_volume: string;
+          }>
+        >(currencyQuery);
 
     return {
       timeSeries: volumeData.map((d) => ({
@@ -197,9 +225,14 @@ export class AnalyticsService {
       ORDER BY ${dateGrouping}
     `;
 
-    const registrationData = await this.prisma.client.$queryRawUnsafe<
-      Array<{ period: string; count: bigint }>
-    >(registrationQuery, ...params);
+    // Pass parameters correctly - if params array is empty, don't spread it
+    const registrationData = params.length > 0
+      ? await this.prisma.client.$queryRawUnsafe<
+          Array<{ period: string; count: bigint }>
+        >(registrationQuery, ...params)
+      : await this.prisma.client.$queryRawUnsafe<
+          Array<{ period: string; count: bigint }>
+        >(registrationQuery);
 
     // Users by country
     const countryQuery = `
@@ -213,9 +246,13 @@ export class AnalyticsService {
       LIMIT 20
     `;
 
-    const countryData = await this.prisma.client.$queryRawUnsafe<
-      Array<{ country: string; count: bigint }>
-    >(countryQuery, ...params);
+    const countryData = params.length > 0
+      ? await this.prisma.client.$queryRawUnsafe<
+          Array<{ country: string; count: bigint }>
+        >(countryQuery, ...params)
+      : await this.prisma.client.$queryRawUnsafe<
+          Array<{ country: string; count: bigint }>
+        >(countryQuery);
 
     // Users by verification status
     const verificationQuery = `
@@ -230,9 +267,13 @@ export class AnalyticsService {
       GROUP BY verify_user
     `;
 
-    const verificationData = await this.prisma.client.$queryRawUnsafe<
-      Array<{ status: string; count: bigint }>
-    >(verificationQuery, ...params);
+    const verificationData = params.length > 0
+      ? await this.prisma.client.$queryRawUnsafe<
+          Array<{ status: string; count: bigint }>
+        >(verificationQuery, ...params)
+      : await this.prisma.client.$queryRawUnsafe<
+          Array<{ status: string; count: bigint }>
+        >(verificationQuery);
 
     return {
       registrations: registrationData.map((d) => ({
@@ -302,9 +343,14 @@ export class AnalyticsService {
         ORDER BY ${dateGrouping}
       `;
 
-      const revenueData = await this.prisma.client.$queryRawUnsafe<
-        Array<{ period: string; revenue: string; expenses: string }>
-      >(revenueQuery, ...params);
+      // Pass parameters correctly - if params array is empty, don't spread it
+      const revenueData = params.length > 0
+        ? await this.prisma.client.$queryRawUnsafe<
+            Array<{ period: string; revenue: string; expenses: string }>
+          >(revenueQuery, ...params)
+        : await this.prisma.client.$queryRawUnsafe<
+            Array<{ period: string; revenue: string; expenses: string }>
+          >(revenueQuery);
 
       // Revenue by category
       const categoryQuery = `
@@ -317,9 +363,13 @@ export class AnalyticsService {
         ORDER BY amount DESC
       `;
 
-      const categoryData = await this.prisma.client.$queryRawUnsafe<
-        Array<{ category: string; amount: string }>
-      >(categoryQuery, ...params);
+      const categoryData = params.length > 0
+        ? await this.prisma.client.$queryRawUnsafe<
+            Array<{ category: string; amount: string }>
+          >(categoryQuery, ...params)
+        : await this.prisma.client.$queryRawUnsafe<
+            Array<{ category: string; amount: string }>
+          >(categoryQuery);
 
       return {
         timeSeries: revenueData.map((d) => ({

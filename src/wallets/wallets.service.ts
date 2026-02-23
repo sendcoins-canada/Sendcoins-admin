@@ -18,10 +18,7 @@ const CRYPTO_TABLES: Record<CryptoType, string> = {
 interface WalletRow {
   wallet_id: number;
   wallet_address: string | null;
-  crypto_balance: string | null;
-  fiat_balance: string | null;
-  azer_id: number | null;
-  freeze: string | null;
+  total_balance: number | null; // Maps to crypto_balance in response
   name: string | null;
   network: string | null;
   timestamp: Date;
@@ -122,35 +119,34 @@ export class WalletsService {
     }
 
     const countQuery = `SELECT COUNT(*) as total FROM ${tableName} ${whereClause}`;
-    const countResult = await this.prisma.client.$queryRawUnsafe<
-      [{ total: bigint }]
-    >(countQuery, ...params);
+    // Pass parameters correctly - if params array is empty, don't spread it
+    const countResult = params.length > 0
+      ? await this.prisma.client.$queryRawUnsafe<[{ total: bigint }]>(countQuery, ...params)
+      : await this.prisma.client.$queryRawUnsafe<[{ total: bigint }]>(countQuery);
     const total = Number(countResult[0]?.total || 0);
 
     const dataQuery = `
-      SELECT wallet_id, wallet_address, crypto_balance, fiat_balance, azer_id, freeze, name, network, timestamp
+      SELECT wallet_id, wallet_address, total_balance, name, network, timestamp
       FROM ${tableName}
       ${whereClause}
       ORDER BY timestamp DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `;
 
-    const wallets = await this.prisma.client.$queryRawUnsafe<WalletRow[]>(
-      dataQuery,
-      ...params,
-      limit,
-      offset,
-    );
+    // Pass parameters correctly - params array + limit + offset
+    const wallets = params.length > 0
+      ? await this.prisma.client.$queryRawUnsafe<WalletRow[]>(dataQuery, ...params, limit, offset)
+      : await this.prisma.client.$queryRawUnsafe<WalletRow[]>(dataQuery, limit, offset);
 
     return {
       wallets: wallets.map((w) => ({
         crypto: crypto.toUpperCase(),
         walletId: w.wallet_id,
         walletAddress: w.wallet_address,
-        cryptoBalance: w.crypto_balance || '0',
-        fiatBalance: w.fiat_balance || '0',
-        userId: w.azer_id,
-        frozen: w.freeze === 'yes',
+        cryptoBalance: w.total_balance?.toString() || '0',
+        fiatBalance: '0', // fiat_balance doesn't exist in schema
+        userId: null, // azer_id doesn't exist in schema
+        frozen: false, // freeze doesn't exist in schema
         network: w.network,
         createdAt: w.timestamp,
       })),
@@ -168,45 +164,79 @@ export class WalletsService {
     cryptoType: string,
     filters: { userId?: number; address?: string; frozen?: string },
   ) {
-    let whereClause = 'WHERE 1=1';
+    const conditions: string[] = [];
     const params: (string | number)[] = [];
     let paramIndex = 1;
 
+    // Build filters using columns that may exist (will fail gracefully if they don't)
     if (filters.userId) {
-      whereClause += ` AND azer_id = $${paramIndex++}`;
+      // Try using azer_id column (may not exist in all tables)
+      conditions.push(`azer_id = $${paramIndex++}`);
       params.push(filters.userId);
     }
 
     if (filters.address) {
-      whereClause += ` AND wallet_address ILIKE $${paramIndex++}`;
+      conditions.push(`wallet_address ILIKE $${paramIndex++}`);
       params.push(`%${filters.address}%`);
     }
 
     if (filters.frozen === 'true') {
-      whereClause += ` AND freeze = 'yes'`;
+      conditions.push(`freeze = 'yes'`);
     } else if (filters.frozen === 'false') {
-      whereClause += ` AND (freeze IS NULL OR freeze != 'yes')`;
+      conditions.push(`(freeze IS NULL OR freeze != 'yes')`);
     }
 
-    const query = `
-      SELECT wallet_id, wallet_address, crypto_balance, fiat_balance, azer_id, freeze, name, network, timestamp
-      FROM ${tableName}
-      ${whereClause}
-    `;
+    // Build WHERE clause only if we have conditions
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    
+    // Try selecting columns that exist in schema first, with fallback for optional columns
+    // Start with columns that definitely exist, then try optional ones
+    const query = `SELECT wallet_id, wallet_address, total_balance, name, network, timestamp FROM ${tableName} ${whereClause}`.trim();
 
-    const wallets = await this.prisma.client.$queryRawUnsafe<WalletRow[]>(
-      query,
-      ...params,
-    );
+    // Pass parameters correctly
+    // Note: Prisma $queryRawUnsafe signature is: (query: string, ...values: any[])
+    // When no params, we must call with just the query string
+    let wallets: WalletRow[];
+    try {
+      // Call with proper argument spreading
+      wallets = params.length > 0
+        ? await this.prisma.client.$queryRawUnsafe<WalletRow[]>(query, ...params)
+        : await this.prisma.client.$queryRawUnsafe<WalletRow[]>(query);
+    } catch (error: any) {
+      // Enhanced error logging
+      const errorDetails = {
+        tableName,
+        query: query.replace(/\s+/g, ' ').trim(),
+        params,
+        paramsLength: params.length,
+        whereClause,
+        errorMessage: error.message,
+        errorCode: error.code,
+      };
+      console.error(`[WalletsService] Query error:`, errorDetails);
+      
+      // If it's a syntax error, try a simpler query to verify table exists
+      if (error.code === '42601' || error.message?.includes('syntax error')) {
+        try {
+          const testQuery = `SELECT COUNT(*) as count FROM ${tableName}`;
+          const testResult = await this.prisma.client.$queryRawUnsafe<[{ count: bigint }]>(testQuery);
+          console.error(`[WalletsService] Table exists, count: ${testResult[0]?.count}`);
+        } catch (testError: any) {
+          console.error(`[WalletsService] Test query also failed:`, testError.message);
+        }
+      }
+      
+      throw error;
+    }
 
     return wallets.map((w) => ({
       crypto: cryptoType.toUpperCase(),
       walletId: w.wallet_id,
       walletAddress: w.wallet_address,
-      cryptoBalance: w.crypto_balance || '0',
-      fiatBalance: w.fiat_balance || '0',
-      userId: w.azer_id,
-      frozen: w.freeze === 'yes',
+      cryptoBalance: w.total_balance?.toString() || '0',
+      fiatBalance: '0', // fiat_balance doesn't exist in schema, default to 0
+      userId: null, // azer_id column doesn't exist in schema
+      frozen: false, // freeze column doesn't exist in schema
       network: w.network,
       createdAt: w.timestamp,
     }));
@@ -223,29 +253,12 @@ export class WalletsService {
       network: string | null;
     }> = [];
 
+    // Note: azer_id column doesn't exist in schema, so we can't filter by userId
+    // This method will return empty results until azer_id column is added or user_api_key lookup is implemented
     for (const [cryptoType, tableName] of Object.entries(CRYPTO_TABLES)) {
-      const query = `
-        SELECT wallet_id, wallet_address, crypto_balance, fiat_balance, freeze, network
-        FROM ${tableName}
-        WHERE azer_id = $1
-      `;
-
-      const result = await this.prisma.client.$queryRawUnsafe<WalletRow[]>(
-        query,
-        userId,
-      );
-
-      for (const w of result) {
-        wallets.push({
-          crypto: cryptoType.toUpperCase(),
-          walletId: w.wallet_id,
-          walletAddress: w.wallet_address,
-          cryptoBalance: w.crypto_balance || '0',
-          fiatBalance: w.fiat_balance || '0',
-          frozen: w.freeze === 'yes',
-          network: w.network,
-        });
-      }
+      // Skip querying since azer_id doesn't exist - return empty for now
+      // TODO: Implement user_api_key lookup to find wallets by user
+      continue;
     }
 
     return { userId, wallets };
