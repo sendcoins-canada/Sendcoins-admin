@@ -98,19 +98,38 @@ async function bootstrap() {
     }),
   );
 
-  // CORS - Allow all origins
-  app.enableCors();
+  // CORS - Use CORS_ORIGINS env (comma-separated) or allow all
+  const corsOrigins = process.env.CORS_ORIGINS;
+  if (corsOrigins) {
+    app.enableCors({
+      origin: corsOrigins.split(',').map((o) => o.trim()),
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-MFA-Token'],
+    });
+  } else {
+    app.enableCors({ credentials: true });
+  }
 
   // Protect Swagger with HTTP Basic Auth in production (before Swagger setup)
   if (process.env.NODE_ENV === 'production') {
-    app.use(
-      '/api/docs',
-      basicAuth({
-        users: { admin: 'SwaggerDocs2025!' },
-        challenge: true,
-        realm: 'SendCoins Admin API Docs',
-      }),
-    );
+    const swaggerUser = process.env.SWAGGER_USER || 'admin';
+    const swaggerPassword = process.env.SWAGGER_PASSWORD;
+
+    if (swaggerPassword) {
+      app.use(
+        '/api/docs',
+        basicAuth({
+          users: { [swaggerUser]: swaggerPassword },
+          challenge: true,
+          realm: 'SendCoins Admin API Docs',
+        }),
+      );
+    } else {
+      console.warn(
+        'WARNING: SWAGGER_PASSWORD not set. Swagger docs are unprotected in production!',
+      );
+    }
   }
 
   const config = new DocumentBuilder()
