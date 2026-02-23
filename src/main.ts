@@ -98,18 +98,8 @@ async function bootstrap() {
     }),
   );
 
-  // CORS - Use CORS_ORIGINS env (comma-separated) or allow all
-  const corsOrigins = process.env.CORS_ORIGINS;
-  if (corsOrigins) {
-    app.enableCors({
-      origin: corsOrigins.split(',').map((o) => o.trim()),
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-MFA-Token'],
-    });
-  } else {
-    app.enableCors({ credentials: true });
-  }
+  // CORS - Allow all origins
+  app.enableCors();
 
   // Protect Swagger with HTTP Basic Auth in production (before Swagger setup)
   if (process.env.NODE_ENV === 'production') {
