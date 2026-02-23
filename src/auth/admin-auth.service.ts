@@ -154,6 +154,8 @@ export class AdminAuthService {
   private buildAdminResponse(adminWithDetails: AdminWithRelations) {
     const department = adminWithDetails.department;
     const dynamicRole = adminWithDetails.dynamicRole;
+    // Cast to access MFA fields
+    const adminMfa = adminWithDetails as unknown as AdminWithMfa;
 
     return {
       id: adminWithDetails.id,
@@ -183,6 +185,7 @@ export class AdminAuthService {
         : null,
       lastLoginAt: adminWithDetails.lastLoginAt ?? null,
       status: adminWithDetails.status,
+      mfaEnabled: adminMfa.mfaEnabled ?? false,
     };
   }
 
@@ -854,6 +857,139 @@ export class AdminAuthService {
       refreshToken,
       expiresIn: ACCESS_TOKEN_EXPIRY,
       admin: this.buildAdminResponse(adminWithDetails),
+    };
+  }
+
+  /**
+   * Verify MFA for a sensitive action (user is already logged in)
+   * Returns a short-lived action token that can be used to authorize the action
+   */
+  async verifyActionMfa(
+    adminId: number,
+    code: string,
+    action?: string,
+  ): Promise<{ success: boolean; actionToken: string; expiresIn: number }> {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!admin || admin.status !== AdminStatus.ACTIVE) {
+      throw new UnauthorizedException('Invalid user');
+    }
+
+    const adminMfa = admin as unknown as AdminWithMfa;
+
+    if (!adminMfa.mfaEnabled || !adminMfa.mfaSecret) {
+      throw new BadRequestException('MFA is not enabled for this account');
+    }
+
+    // Verify TOTP or backup code
+    const totpValid = this.mfaService.verifyToken(adminMfa.mfaSecret, code);
+
+    let backupCodeUsed = false;
+    let updatedBackupCodes = adminMfa.mfaBackupCodes ?? null;
+
+    if (!totpValid && adminMfa.mfaBackupCodes) {
+      const backupCodes = adminMfa.mfaBackupCodes;
+      for (let i = 0; i < backupCodes.length; i++) {
+        const isValid = await this.mfaService.verifyBackupCode(code, [
+          backupCodes[i],
+        ]);
+        if (isValid) {
+          backupCodeUsed = true;
+          updatedBackupCodes = this.mfaService.removeBackupCode(
+            backupCodes,
+            backupCodes[i],
+          );
+          break;
+        }
+      }
+    }
+
+    if (!totpValid && !backupCodeUsed) {
+      throw new UnauthorizedException('Invalid MFA code');
+    }
+
+    // Update backup codes if one was used
+    if (backupCodeUsed) {
+      await this.prisma.client.adminUser.update({
+        where: { id: admin.id },
+        data: {
+          mfaBackupCodes: updatedBackupCodes,
+        } as Prisma.AdminUserUpdateInput,
+      });
+    }
+
+    // Generate a short-lived action token (5 minutes)
+    const actionToken = await this.jwtService.signAsync(
+      {
+        sub: admin.id,
+        purpose: 'action_mfa_verified',
+        action: action || 'SENSITIVE_ACTION',
+        verifiedAt: Date.now(),
+      },
+      { expiresIn: '5m' } as JwtSignOptions,
+    );
+
+    // Log the MFA verification for action
+    await this.audit.log('ACTION_MFA_VERIFIED', admin.id, {
+      action: action || 'SENSITIVE_ACTION',
+      backupCodeUsed,
+    });
+
+    return {
+      success: true,
+      actionToken,
+      expiresIn: 300, // 5 minutes in seconds
+    };
+  }
+
+  /**
+   * Check if an action token is valid
+   */
+  async validateActionToken(
+    token: string,
+    adminId: number,
+  ): Promise<{ valid: boolean; action?: string }> {
+    try {
+      const payload = await this.jwtService.verifyAsync(token);
+
+      if (
+        payload.purpose !== 'action_mfa_verified' ||
+        payload.sub !== adminId
+      ) {
+        return { valid: false };
+      }
+
+      return {
+        valid: true,
+        action: payload.action,
+      };
+    } catch {
+      return { valid: false };
+    }
+  }
+
+  /**
+   * Check if admin has MFA enabled
+   */
+  async checkMfaStatus(adminId: number): Promise<{
+    mfaEnabled: boolean;
+    mfaRequired: boolean;
+  }> {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!admin) {
+      throw new UnauthorizedException('Invalid user');
+    }
+
+    const adminMfa = admin as unknown as AdminWithMfa;
+
+    return {
+      mfaEnabled: adminMfa.mfaEnabled ?? false,
+      mfaRequired: adminMfa.mfaEnabled ?? false, // For now, required if enabled
     };
   }
 

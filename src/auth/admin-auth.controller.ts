@@ -27,6 +27,7 @@ import { VerifyMfaDto } from './dto/verify-mfa.dto';
 import { EnableMfaDto } from './dto/enable-mfa.dto';
 import { UpdateIpAllowlistDto } from './dto/update-ip-allowlist.dto';
 import { RefreshTokenDto, LogoutDto } from './dto/refresh-token.dto';
+import { VerifyActionMfaDto } from './dto/verify-action-mfa.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { Request } from 'express';
 
@@ -339,6 +340,61 @@ export class AdminAuthController {
   })
   generateBackupCodes(@Req() req: AuthenticatedRequest) {
     return this.adminAuthService.generateBackupCodes(req.user.id);
+  }
+
+  @Post('verify-action-mfa')
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Verify MFA for sensitive action',
+    description:
+      'Verify MFA code before performing a sensitive action (e.g., approve transaction, update rates). Returns a short-lived action token.',
+  })
+  @ApiBody({ type: VerifyActionMfaDto })
+  @ApiResponse({
+    status: 200,
+    description: 'MFA verified successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        actionToken: { type: 'string' },
+        expiresIn: { type: 'number', description: 'Token expiry in seconds' },
+      },
+    },
+  })
+  verifyActionMfa(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: VerifyActionMfaDto,
+  ) {
+    return this.adminAuthService.verifyActionMfa(
+      req.user.id,
+      dto.code,
+      dto.action,
+    );
+  }
+
+  @Get('mfa/status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Check MFA status',
+    description: 'Check if MFA is enabled for the current admin.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'MFA status',
+    schema: {
+      type: 'object',
+      properties: {
+        mfaEnabled: { type: 'boolean' },
+        mfaRequired: { type: 'boolean' },
+      },
+    },
+  })
+  getMfaStatus(@Req() req: AuthenticatedRequest) {
+    return this.adminAuthService.checkMfaStatus(req.user.id);
   }
 
   @Post('ip-allowlist')

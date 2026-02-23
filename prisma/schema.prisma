@@ -388,6 +388,38 @@ model bank_list {
   timestamp DateTime @default(now()) @db.Timestamp(6)
 }
 
+model wallets {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_api_key String @unique @db.VarChar(255)
+  status    String   @default("active") @db.VarChar(50)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @default(now()) @db.Timestamptz(6)
+  wallet_accounts wallet_accounts[]
+}
+
+model wallet_accounts {
+  id               String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  wallet_id        String   @db.Uuid
+  crayfi_account_id String? @db.VarChar(255)
+  account_number   String   @db.VarChar(50)
+  account_name     String   @db.VarChar(255)
+  bank_name        String   @db.VarChar(100)
+  bank_code        String   @db.VarChar(20)
+  currency         String   @default("NGN") @db.VarChar(10)
+  account_type     String?  @default("virtual") @db.VarChar(50)
+  available_balance Decimal @default(0) @db.Decimal(20, 2)
+  locked_balance    Decimal @default(0) @db.Decimal(20, 2)
+  actual_balance    Decimal @default(0) @db.Decimal(20, 2)
+  last_synced_at    DateTime? @db.Timestamptz(6)
+  created_at        DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime? @default(now()) @db.Timestamptz(6)
+  wallet            wallets  @relation(fields: [wallet_id], references: [id], onDelete: Cascade)
+
+  @@index([wallet_id])
+  @@index([account_number])
+  @@index([currency])
+}
+
 model coin_network {
   net_id            Int      @id @default(autoincrement())
   symbol            String?  @db.VarChar(200)
@@ -598,6 +630,40 @@ model send_coin_user {
   @@index([google_id], map: "idx_google_id")
   @@index([user_email, last_login_ip], map: "idx_send_coin_user_email_ip")
   @@index([last_login_ip], map: "idx_send_coin_user_last_login_ip")
+}
+
+model SystemSetting {
+  id           Int       @id @default(autoincrement())
+  settingKey   String    @unique @map("setting_key") @db.VarChar(100)
+  settingValue String    @map("setting_value")
+  settingType  String    @default("string") @map("setting_type") @db.VarChar(20)
+  description  String?
+  updatedBy    String?   @map("updated_by") @db.VarChar(255)
+  updatedAt    DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@map("system_settings")
+}
+
+model AdminSentEmail {
+  id          Int       @id @default(autoincrement())
+  fromEmail   String    @map("from_email") @db.VarChar(255)
+  fromName    String?   @map("from_name") @db.VarChar(255)
+  toEmails    String[]  @map("to_emails")
+  ccEmails    String[]  @map("cc_emails")
+  bccEmails   String[]  @map("bcc_emails")
+  subject     String    @db.VarChar(500)
+  bodyText    String?   @map("body_text") @db.Text
+  bodyHtml    String?   @map("body_html") @db.Text
+  status      String    @default("sent") @db.VarChar(20)
+  sentAt      DateTime? @map("sent_at") @db.Timestamp(6)
+  createdById Int?      @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@index([createdById])
+  @@index([sentAt])
+  @@index([status])
+  @@map("admin_sent_emails")
 }
 
 model survey_config {

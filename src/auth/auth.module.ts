@@ -8,6 +8,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { MailModule } from '../mail/mail.module';
 import { AdminAuthAuditService } from './admin-audit.service';
 import { PermissionsGuard } from './permissions.guard';
+import { MfaActionGuard } from './mfa-action.guard';
 import { MfaService } from './mfa.service';
 
 // Validate JWT_SECRET at startup - fail fast if not configured in production
@@ -48,9 +49,10 @@ const getJwtSecret = (): string => {
     JwtStrategy,
     AdminAuthAuditService,
     PermissionsGuard,
+    MfaActionGuard,
     MfaService,
   ],
   controllers: [AdminAuthController],
-  exports: [JwtModule, PermissionsGuard],
+  exports: [JwtModule, PermissionsGuard, MfaActionGuard, AdminAuthService],
 })
 export class AuthModule {}
