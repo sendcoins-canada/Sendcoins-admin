@@ -253,12 +253,78 @@ export class WalletsService {
       network: string | null;
     }> = [];
 
-    // Note: azer_id column doesn't exist in schema, so we can't filter by userId
-    // This method will return empty results until azer_id column is added or user_api_key lookup is implemented
-    for (const [cryptoType, tableName] of Object.entries(CRYPTO_TABLES)) {
-      // Skip querying since azer_id doesn't exist - return empty for now
-      // TODO: Implement user_api_key lookup to find wallets by user
-      continue;
+    // First, get the user's api_key from send_coin_user table
+    const user = await this.prisma.client.send_coin_user.findUnique({
+      where: { azer_id: userId },
+      select: { api_key: true },
+    });
+
+    if (!user?.api_key) {
+      return { userId, wallets };
+    }
+
+    // Find wallet addresses from transaction history where user was involved
+    const userApiKey = user.api_key;
+
+    // Get wallet addresses from wallet_transfers (where user sent or received)
+    const transferWallets = await this.prisma.client.wallet_transfers.findMany({
+      where: { user_api_key: userApiKey },
+      select: {
+        asset: true,
+        recipient_wallet_address: true,
+        network: true,
+      },
+      distinct: ['recipient_wallet_address'],
+    });
+
+    // Collect unique wallet addresses by crypto type from wallet_transfers
+    // Note: transaction_history doesn't store wallet addresses, only wallet_transfers does
+    const walletMap = new Map<string, Set<string>>();
+
+    for (const tx of transferWallets) {
+      if (tx.recipient_wallet_address && tx.asset) {
+        const cryptoType = tx.asset.toUpperCase();
+        if (!walletMap.has(cryptoType)) {
+          walletMap.set(cryptoType, new Set());
+        }
+        walletMap.get(cryptoType)!.add(tx.recipient_wallet_address);
+      }
+    }
+
+    // For each wallet address found, try to get wallet details from the wallet tables
+    for (const [cryptoType, addresses] of walletMap) {
+      const tableName = CRYPTO_TABLES[cryptoType as CryptoType];
+      if (!tableName) continue;
+
+      for (const address of addresses) {
+        try {
+          const query = `
+            SELECT wallet_id, wallet_address, total_balance, name, network, timestamp, freeze
+            FROM ${tableName}
+            WHERE wallet_address = $1
+            LIMIT 1
+          `;
+          const result = await this.prisma.client.$queryRawUnsafe<
+            Array<WalletRow & { freeze?: string }>
+          >(query, address);
+
+          if (result.length > 0) {
+            const w = result[0];
+            wallets.push({
+              crypto: cryptoType,
+              walletId: w.wallet_id,
+              walletAddress: w.wallet_address,
+              cryptoBalance: w.total_balance?.toString() || '0',
+              fiatBalance: '0',
+              frozen: w.freeze === 'yes',
+              network: w.network,
+            });
+          }
+        } catch {
+          // Wallet table query failed, skip this crypto type
+          continue;
+        }
+      }
     }
 
     return { userId, wallets };

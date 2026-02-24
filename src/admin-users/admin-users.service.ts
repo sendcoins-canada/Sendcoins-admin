@@ -9,7 +9,7 @@ import { CreateAdminUserDto } from './dto/create-admin-user.dto';
 import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 import { GetAdminUsersQueryDto } from './dto/get-admin-users-query.dto';
 import { MailService } from '../mail/mail.service';
-import { AdminStatus, RoleStatus, Prisma } from '@prisma/client';
+import { AdminStatus, RoleStatus, Prisma, AdminRole } from '@prisma/client';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import type { StringValue } from 'ms';
 import { AdminAuditService } from './admin-audit.service';
@@ -64,7 +64,7 @@ export class AdminUsersService {
           firstName: dto.firstName,
           lastName: dto.lastName,
           departmentId: dto.departmentId,
-          role: dto.role, // Legacy role enum
+          role: dto.role ?? AdminRole.ENGINEER, // Legacy role; default when using roleId
           roleId: dto.roleId, // Dynamic role (takes precedence)
           status: AdminStatus.ACTIVE,
           // placeholder password until they set one
@@ -268,6 +268,8 @@ export class AdminUsersService {
             }
           : null,
         passwordSet: admin.passwordSet,
+        mfaEnabled: admin.mfaEnabled,
+        lastActive: admin.lastMfaAt ?? admin.updatedAt,
         createdAt: admin.createdAt,
         updatedAt: admin.updatedAt,
       })),
@@ -491,6 +493,53 @@ export class AdminUsersService {
       email: updated.email,
       status: updated.status,
       message: 'Admin user has been reactivated',
+    };
+  }
+
+  /**
+   * Permanently delete an admin user (remove from database).
+   * Prevents self-delete. Reassigns any roles they created to the actor.
+   */
+  async deletePermanently(id: number, actorId: number) {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: { rolesCreated: true, rolesLastUpdated: true },
+        },
+      },
+    });
+
+    if (!admin) {
+      throw new NotFoundException(`Admin user with ID ${id} not found`);
+    }
+
+    if (admin.id === actorId) {
+      throw new BadRequestException('You cannot delete your own account');
+    }
+
+    await this.prisma.client.$transaction(async (tx) => {
+      // Reassign roles created by this admin to the actor so FK allows delete
+      await tx.role.updateMany({
+        where: { createdById: id },
+        data: { createdById: actorId },
+      });
+      await tx.role.updateMany({
+        where: { lastUpdatedById: id },
+        data: { lastUpdatedById: null },
+      });
+      await tx.adminUser.delete({
+        where: { id },
+      });
+    });
+
+    await this.audit.log('ADMIN_DELETED', actorId, id, {
+      email: admin.email,
+    });
+
+    return {
+      id,
+      message: 'Admin user has been permanently deleted',
     };
   }
 }

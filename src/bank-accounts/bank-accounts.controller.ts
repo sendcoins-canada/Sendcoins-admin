@@ -28,14 +28,14 @@ export class BankAccountsController {
     @Query('limit') limit?: string,
     @Query('search') search?: string,
     @Query('country') country?: string,
-    @Query('flagged') flagged?: string,
+    @Query('currency') currency?: string,
   ) {
     return this.bankAccountsService.getAccounts({
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? Math.min(parseInt(limit, 10), 100) : 20,
       search,
       country,
-      flagged: flagged === 'true',
+      currency,
     });
   }
 
@@ -49,20 +49,7 @@ export class BankAccountsController {
   }
 
   /**
-   * Get bank account by keychain
-   */
-  @Get(':keychain')
-  @RequirePermission(Permission.READ_USERS)
-  async getAccount(@Param('keychain') keychain: string) {
-    const account = await this.bankAccountsService.getAccount(keychain);
-    if (!account) {
-      return { error: 'Bank account not found' };
-    }
-    return account;
-  }
-
-  /**
-   * Get bank accounts for a specific user
+   * Get bank accounts for a specific user (must be before :id to avoid matching)
    */
   @Get('user/:userId')
   @RequirePermission(Permission.READ_USERS)
@@ -71,14 +58,27 @@ export class BankAccountsController {
   }
 
   /**
-   * Delete a bank account (admin action)
+   * Get fiat account by id (UUID)
    */
-  @Delete(':keychain')
+  @Get(':id')
+  @RequirePermission(Permission.READ_USERS)
+  async getAccount(@Param('id') id: string) {
+    const account = await this.bankAccountsService.getAccount(id);
+    if (!account) {
+      return { error: 'Fiat account not found' };
+    }
+    return account;
+  }
+
+  /**
+   * Delete a fiat account (admin action)
+   */
+  @Delete(':id')
   @RequirePermission(Permission.SUSPEND_USERS)
   async deleteAccount(
-    @Param('keychain') keychain: string,
+    @Param('id') id: string,
     @Request() req: { user: { id: number } },
   ) {
-    return this.bankAccountsService.deleteAccount(keychain, req.user.id);
+    return this.bankAccountsService.deleteAccount(id, req.user.id);
   }
 }

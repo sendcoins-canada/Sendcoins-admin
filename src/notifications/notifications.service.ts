@@ -366,8 +366,7 @@ export class NotificationsService {
   }
 
   /**
-   * Send notification email based on type
-   * TODO: Implement specific email templates in MailService
+   * Send notification email based on type with proper HTML templates
    */
   private async sendNotificationEmail(
     email: string,
@@ -377,18 +376,189 @@ export class NotificationsService {
     message: string,
     metadata?: NotificationMetadata,
   ): Promise<boolean> {
-    // For now, send a generic notification email
-    // TODO: Add specific email templates to MailService
+    const html = this.buildEmailTemplate(firstName, type, title, message, metadata);
+    const text = this.buildPlainTextEmail(firstName, message, metadata);
+
     try {
       return await this.mailService.send({
-        from: process.env.MAIL_FROM,
+        from: process.env.MAIL_FROM || 'noreply@sendcoins.com',
         to: email,
-        subject: title,
-        text: `Hi ${firstName},\n\n${message}\n\n${metadata?.ipAddress ? `IP: ${metadata.ipAddress}` : ''}\n${metadata?.device ? `Device: ${metadata.device}` : ''}\n\nBest,\nSendCoins Team`,
+        subject: `[SendCoins Admin] ${title}`,
+        text,
+        html,
       });
-    } catch {
-      console.error(`Failed to send notification email to ${email}`);
+    } catch (error) {
+      console.error(`Failed to send notification email to ${email}:`, error);
       return false;
     }
+  }
+
+  /**
+   * Build HTML email template based on notification type
+   */
+  private buildEmailTemplate(
+    firstName: string,
+    type: AdminNotificationType,
+    title: string,
+    message: string,
+    metadata?: NotificationMetadata,
+  ): string {
+    const iconColor = this.getNotificationColor(type);
+    const icon = this.getNotificationIcon(type);
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <tr>
+      <td>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+          <!-- Header -->
+          <tr>
+            <td style="background-color: ${iconColor}; padding: 24px 32px; text-align: center;">
+              <span style="font-size: 32px;">${icon}</span>
+              <h1 style="color: #ffffff; margin: 12px 0 0 0; font-size: 20px; font-weight: 600;">${title}</h1>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding: 32px;">
+              <p style="margin: 0 0 16px 0; color: #333; font-size: 16px;">Hi ${firstName},</p>
+              <p style="margin: 0 0 24px 0; color: #555; font-size: 15px; line-height: 1.6;">${message}</p>
+              ${metadata ? this.buildMetadataSection(metadata) : ''}
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 32px; background-color: #f9fafb; border-top: 1px solid #e5e7eb;">
+              <p style="margin: 0; color: #6b7280; font-size: 13px; text-align: center;">
+                This is an automated notification from SendCoins Admin Panel.
+                <br>Please do not reply to this email.
+              </p>
+            </td>
+          </tr>
+        </table>
+        <p style="margin: 16px 0 0 0; color: #9ca3af; font-size: 12px; text-align: center;">
+          &copy; ${new Date().getFullYear()} SendCoins. All rights reserved.
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+  }
+
+  /**
+   * Build metadata section for email
+   */
+  private buildMetadataSection(metadata: NotificationMetadata): string {
+    const items: string[] = [];
+
+    if (metadata.ipAddress) {
+      items.push(`<tr><td style="padding: 8px 0; color: #6b7280; font-size: 13px;">IP Address:</td><td style="padding: 8px 0 8px 16px; color: #374151; font-size: 13px;">${metadata.ipAddress}</td></tr>`);
+    }
+    if (metadata.device) {
+      items.push(`<tr><td style="padding: 8px 0; color: #6b7280; font-size: 13px;">Device:</td><td style="padding: 8px 0 8px 16px; color: #374151; font-size: 13px;">${metadata.device}</td></tr>`);
+    }
+    if (metadata.location) {
+      items.push(`<tr><td style="padding: 8px 0; color: #6b7280; font-size: 13px;">Location:</td><td style="padding: 8px 0 8px 16px; color: #374151; font-size: 13px;">${metadata.location}</td></tr>`);
+    }
+    if (metadata.transactionReference) {
+      items.push(`<tr><td style="padding: 8px 0; color: #6b7280; font-size: 13px;">Transaction:</td><td style="padding: 8px 0 8px 16px; color: #374151; font-size: 13px;">${metadata.transactionReference}</td></tr>`);
+    }
+
+    if (items.length === 0) return '';
+
+    return `
+      <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px; margin-top: 16px;">
+        <p style="margin: 0 0 12px 0; color: #374151; font-size: 14px; font-weight: 600;">Details</p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          ${items.join('')}
+        </table>
+      </div>`;
+  }
+
+  /**
+   * Get notification color based on type
+   */
+  private getNotificationColor(type: AdminNotificationType): string {
+    switch (type) {
+      case AdminNotificationType.ADMIN_LOGIN_FAILED:
+      case AdminNotificationType.SUSPICIOUS_LOGIN_ATTEMPT:
+      case AdminNotificationType.TRANSACTION_FLAGGED:
+      case AdminNotificationType.ADMIN_DEACTIVATED:
+        return '#dc2626'; // Red
+      case AdminNotificationType.TRANSACTION_APPROVED:
+      case AdminNotificationType.ADMIN_CREATED:
+        return '#16a34a'; // Green
+      case AdminNotificationType.HIGH_VALUE_TRANSACTION:
+      case AdminNotificationType.NEW_IP_LOGIN:
+        return '#d97706'; // Amber
+      default:
+        return '#2563eb'; // Blue
+    }
+  }
+
+  /**
+   * Get notification icon based on type
+   */
+  private getNotificationIcon(type: AdminNotificationType): string {
+    switch (type) {
+      case AdminNotificationType.ADMIN_LOGIN:
+      case AdminNotificationType.NEW_IP_LOGIN:
+        return '🔐';
+      case AdminNotificationType.ADMIN_LOGIN_FAILED:
+      case AdminNotificationType.SUSPICIOUS_LOGIN_ATTEMPT:
+        return '⚠️';
+      case AdminNotificationType.ADMIN_PASSWORD_CHANGED:
+        return '🔑';
+      case AdminNotificationType.ADMIN_CREATED:
+        return '👤';
+      case AdminNotificationType.ADMIN_DEACTIVATED:
+        return '🚫';
+      case AdminNotificationType.ADMIN_ROLE_CHANGED:
+        return '👔';
+      case AdminNotificationType.TRANSACTION_FLAGGED:
+        return '🚩';
+      case AdminNotificationType.TRANSACTION_APPROVED:
+        return '✅';
+      case AdminNotificationType.TRANSACTION_REJECTED:
+        return '❌';
+      case AdminNotificationType.HIGH_VALUE_TRANSACTION:
+        return '💰';
+      case AdminNotificationType.ROLE_CREATED:
+      case AdminNotificationType.ROLE_UPDATED:
+      case AdminNotificationType.ROLE_DELETED:
+        return '🎭';
+      default:
+        return '📢';
+    }
+  }
+
+  /**
+   * Build plain text email fallback
+   */
+  private buildPlainTextEmail(
+    firstName: string,
+    message: string,
+    metadata?: NotificationMetadata,
+  ): string {
+    let text = `Hi ${firstName},\n\n${message}\n\n`;
+
+    if (metadata) {
+      if (metadata.ipAddress) text += `IP Address: ${metadata.ipAddress}\n`;
+      if (metadata.device) text += `Device: ${metadata.device}\n`;
+      if (metadata.location) text += `Location: ${metadata.location}\n`;
+      if (metadata.transactionReference) text += `Transaction: ${metadata.transactionReference}\n`;
+    }
+
+    text += `\nBest regards,\nSendCoins Team`;
+    return text;
   }
 }

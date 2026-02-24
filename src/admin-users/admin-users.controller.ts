@@ -4,12 +4,14 @@ import {
   Delete,
   Get,
   Param,
+  ParseBoolPipe,
   ParseIntPipe,
   Patch,
   Post,
   Query,
   Req,
   UseGuards,
+  DefaultValuePipe,
 } from '@nestjs/common';
 import { AdminUsersService } from './admin-users.service';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
@@ -17,7 +19,9 @@ import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 import { GetAdminUsersQueryDto } from './dto/get-admin-users-query.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
+import { MfaActionGuard } from '../auth/mfa-action.guard';
 import { RequirePermission } from '../auth/require-permission.decorator';
+import { RequireMfa } from '../auth/require-mfa.decorator';
 import { Permission } from '../auth/permissions.enum';
 import { AdminRole } from '@prisma/client';
 import {
@@ -37,7 +41,7 @@ interface AuthenticatedRequest {
 @ApiTags('AdminUsers')
 @ApiBearerAuth()
 @Controller('admin-users')
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard, MfaActionGuard)
 export class AdminUsersController {
   constructor(private readonly adminUsersService: AdminUsersService) {}
 
@@ -87,10 +91,11 @@ export class AdminUsersController {
 
   @Post()
   @RequirePermission(Permission.MANAGE_ADMINS)
+  @RequireMfa()
   @ApiOperation({
     summary: 'Create admin user',
     description:
-      'Create a new admin user and email them a password setup link. You can assign a dynamic role (roleId) for fine-grained permissions, or use the legacy role enum. If roleId is provided, it takes precedence over the role enum. You can also assign a department (departmentId) from the departments list.',
+      'Create a new admin user and email them a password setup link. Requires MFA verification. You can assign a dynamic role (roleId) for fine-grained permissions, or use the legacy role enum. If roleId is provided, it takes precedence over the role enum. You can also assign a department (departmentId) from the departments list.',
   })
   @ApiBody({ type: CreateAdminUserDto })
   @ApiResponse({
@@ -177,14 +182,15 @@ export class AdminUsersController {
   @Delete(':id')
   @RequirePermission(Permission.MANAGE_ADMINS)
   @ApiOperation({
-    summary: 'Deactivate admin user',
+    summary: 'Deactivate or permanently delete admin user',
     description:
-      'Deactivate an admin user account. The user will no longer be able to login. Requires MANAGE_ADMINS permission.',
+      'If permanent=true, removes the admin from the database. Otherwise deactivates (sets status INACTIVE). Requires MANAGE_ADMINS permission.',
   })
   @ApiParam({ name: 'id', type: Number, description: 'Admin user ID' })
+  @ApiQuery({ name: 'permanent', required: false, type: Boolean, description: 'If true, permanently delete; otherwise deactivate' })
   @ApiResponse({
     status: 200,
-    description: 'Admin user deactivated successfully',
+    description: 'Admin user deactivated or deleted successfully',
   })
   @ApiResponse({
     status: 404,
@@ -192,12 +198,16 @@ export class AdminUsersController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Cannot deactivate your own account',
+    description: 'Cannot deactivate/delete your own account',
   })
-  deactivate(
+  async delete(
     @Param('id', ParseIntPipe) id: number,
+    @Query('permanent', new DefaultValuePipe(false), ParseBoolPipe) permanent: boolean,
     @Req() req: AuthenticatedRequest,
   ) {
+    if (permanent) {
+      return this.adminUsersService.deletePermanently(id, req.user.id);
+    }
     return this.adminUsersService.deactivate(id, req.user.id);
   }
 

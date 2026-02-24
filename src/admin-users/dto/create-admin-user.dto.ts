@@ -33,12 +33,14 @@ export class CreateAdminUserDto {
   departmentId?: number;
 
   @ApiProperty({
+    required: false,
     enum: AdminRole,
     description:
-      'Legacy role enum. Required field, but ignored if roleId is provided. Use roleId for dynamic roles with permissions.',
+      'Legacy role enum. Optional when roleId is provided. When using dynamic roles (roleId), this is defaulted to ENGINEER.',
   })
+  @IsOptional()
   @IsEnum(AdminRole)
-  role!: AdminRole;
+  role?: AdminRole;
 
   @ApiProperty({
     required: false,

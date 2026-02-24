@@ -1,22 +1,21 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-export interface BankAccount {
-  id: number;
-  keychain: string;
+export interface FiatAccount {
+  id: string;
+  accountNumber: string;
+  accountName: string;
+  bankName: string;
+  bankCode: string;
+  currency: string;
+  availableBalance: number;
+  lockedBalance: number;
+  actualBalance: number;
   userId: number;
   userEmail: string;
   userName: string;
-  country: string;
-  currency: string;
-  bankName: string;
-  accountNumber: string;
-  accountName: string;
-  isDefault: boolean;
-  isVerified: boolean;
-  isFlagged: boolean;
-  flagReason?: string;
-  createdAt: Date;
+  createdAt: string;
 }
 
 @Injectable()
@@ -24,113 +23,90 @@ export class BankAccountsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Get all bank accounts with pagination and filters
+   * Get all fiat accounts (wallet_accounts / CrayFi virtual accounts) with pagination and filters
    */
   async getAccounts(params: {
     page?: number;
     limit?: number;
     search?: string;
     country?: string;
-    flagged?: boolean;
+    currency?: string;
   }) {
-    const { page = 1, limit = 20, search, country, flagged } = params;
+    const { page = 1, limit = 20, search, currency } = params;
     const offset = (page - 1) * limit;
 
-    let whereClause = 'WHERE 1=1';
-    const queryParams: (string | number | boolean)[] = [];
-    let paramIndex = 1;
+    const where: Prisma.wallet_accountsWhereInput = {};
 
-    if (search) {
-      whereClause += ` AND (
-        ba.bank_account ILIKE $${paramIndex} OR
-        ba.bank_account_name ILIKE $${paramIndex} OR
-        ba.bank_name ILIKE $${paramIndex} OR
-        u.user_email ILIKE $${paramIndex}
-      )`;
-      queryParams.push(`%${search}%`);
-      paramIndex++;
+    if (currency) {
+      where.currency = { equals: currency, mode: 'insensitive' };
     }
 
-    if (country) {
-      whereClause += ` AND ba.country ILIKE $${paramIndex}`;
-      queryParams.push(country);
-      paramIndex++;
+    if (search && search.trim()) {
+      const term = search.trim();
+      const searchConditions: Prisma.wallet_accountsWhereInput[] = [
+        { account_number: { contains: term, mode: 'insensitive' } },
+        { account_name: { contains: term, mode: 'insensitive' } },
+        { bank_name: { contains: term, mode: 'insensitive' } },
+      ];
+      const usersMatchingSearch = await this.prisma.client.send_coin_user.findMany({
+        where: {
+          OR: [
+            { user_email: { contains: term, mode: 'insensitive' } },
+            { first_name: { contains: term, mode: 'insensitive' } },
+            { last_name: { contains: term, mode: 'insensitive' } },
+          ],
+        },
+        select: { api_key: true },
+      });
+      const matchingApiKeys = usersMatchingSearch.map((u) => u.api_key).filter(Boolean) as string[];
+      if (matchingApiKeys.length > 0) {
+        searchConditions.push({ wallet: { user_api_key: { in: matchingApiKeys } } });
+      }
+      where.OR = searchConditions;
     }
 
-    // Get total count
-    const countQuery = `
-      SELECT COUNT(*) as total
-      FROM bank_account ba
-      LEFT JOIN send_coin_user u ON ba.user_api_key = u.api_key
-      ${whereClause}
-    `;
+    const [total, rows] = await Promise.all([
+      this.prisma.client.wallet_accounts.count({ where }),
+      this.prisma.client.wallet_accounts.findMany({
+        where,
+        include: { wallet: true },
+        skip: offset,
+        take: limit,
+        orderBy: { created_at: 'desc' },
+      }),
+    ]);
 
-    const countResult = await this.prisma.client.$queryRawUnsafe<
-      Array<{ total: bigint }>
-    >(countQuery, ...queryParams);
+    const apiKeys = [...new Set(rows.map((r) => r.wallet.user_api_key).filter(Boolean))] as string[];
+    const users =
+      apiKeys.length > 0
+        ? await this.prisma.client.send_coin_user.findMany({
+            where: { api_key: { in: apiKeys } },
+            select: { api_key: true, azer_id: true, user_email: true, first_name: true, last_name: true },
+          })
+        : [];
+    const userMap = new Map(users.map((u) => [u.api_key, u]));
 
-    const total = Number(countResult[0]?.total || 0);
-
-    // Get accounts
-    const accountsQuery = `
-      SELECT
-        ba.id,
-        ba.keychain,
-        ba.user_api_key,
-        ba.country,
-        ba.currency_iso3 as currency,
-        ba.bank_name,
-        ba.bank_account as account_number,
-        ba.bank_account_name as account_name,
-        ba.set_default,
-        ba.timestamp as created_at,
-        u.azer_id as user_id,
-        u.user_email,
-        u.first_name,
-        u.last_name
-      FROM bank_account ba
-      LEFT JOIN send_coin_user u ON ba.user_api_key = u.api_key
-      ${whereClause}
-      ORDER BY ba.timestamp DESC
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-    `;
-
-    const accounts = await this.prisma.client.$queryRawUnsafe<
-      Array<{
-        id: number;
-        keychain: string;
-        user_api_key: string;
-        country: string;
-        currency: string;
-        bank_name: string;
-        account_number: string;
-        account_name: string;
-        set_default: string | boolean;
-        created_at: Date;
-        user_id: number;
-        user_email: string;
-        first_name: string;
-        last_name: string;
-      }>
-    >(accountsQuery, ...queryParams, limit, offset);
+    const accounts: FiatAccount[] = rows.map((wa) => {
+      const u = wa.wallet.user_api_key ? userMap.get(wa.wallet.user_api_key) : null;
+      return {
+        id: wa.id,
+        accountNumber: wa.account_number,
+        accountName: wa.account_name,
+        bankName: wa.bank_name,
+        bankCode: wa.bank_code,
+        currency: wa.currency,
+        availableBalance: Number(wa.available_balance),
+        lockedBalance: Number(wa.locked_balance),
+        actualBalance: Number(wa.actual_balance),
+        userId: u?.azer_id ?? 0,
+        userEmail: u?.user_email ?? 'Unknown',
+        userName: [u?.first_name, u?.last_name].filter(Boolean).join(' ') || 'Unknown',
+        createdAt: wa.created_at?.toISOString() ?? '',
+      };
+    });
 
     return {
-      accounts: accounts.map((acc) => ({
-        id: acc.id,
-        keychain: acc.keychain,
-        userId: acc.user_id,
-        userEmail: acc.user_email || 'Unknown',
-        userName: [acc.first_name, acc.last_name].filter(Boolean).join(' ') || 'Unknown',
-        country: acc.country,
-        currency: acc.currency,
-        bankName: acc.bank_name,
-        accountNumber: acc.account_number,
-        accountName: acc.account_name,
-        isDefault: acc.set_default === 'true' || acc.set_default === true,
-        isVerified: true, // Assume verified if in database
-        isFlagged: false, // TODO: Add flag column to table
-        createdAt: acc.created_at,
-      })),
+      accounts,
       pagination: {
         page,
         limit,
@@ -141,183 +117,118 @@ export class BankAccountsService {
   }
 
   /**
-   * Get bank account statistics
+   * Get fiat account statistics
    */
   async getStats() {
-    const statsQuery = `
-      SELECT
-        COUNT(*) as total,
-        COUNT(DISTINCT user_api_key) as unique_users,
-        COUNT(DISTINCT country) as countries,
-        COUNT(DISTINCT bank_name) as banks
-      FROM bank_account
-    `;
-
-    const result = await this.prisma.client.$queryRawUnsafe<
-      Array<{
-        total: bigint;
-        unique_users: bigint;
-        countries: bigint;
-        banks: bigint;
-      }>
-    >(statsQuery);
-
-    const stats = result[0] || { total: 0, unique_users: 0, countries: 0, banks: 0 };
+    const [total, walletsWithAccounts] = await Promise.all([
+      this.prisma.client.wallet_accounts.count(),
+      this.prisma.client.wallet_accounts.findMany({
+        select: { wallet_id: true },
+      }),
+    ]);
+    const uniqueWallets = new Set(walletsWithAccounts.map((w) => w.wallet_id)).size;
+    const [currencies, banks] = await Promise.all([
+      this.prisma.client.wallet_accounts.findMany({ select: { currency: true } }).then((r) => new Set(r.map((x) => x.currency)).size),
+      this.prisma.client.wallet_accounts.findMany({ select: { bank_name: true } }).then((r) => new Set(r.map((x) => x.bank_name)).size),
+    ]);
 
     return {
-      total: Number(stats.total),
-      uniqueUsers: Number(stats.unique_users),
-      countries: Number(stats.countries),
-      banks: Number(stats.banks),
+      total,
+      uniqueUsers: uniqueWallets,
+      countries: currencies,
+      banks,
     };
   }
 
   /**
-   * Get a single bank account by keychain
+   * Get a single fiat account by id (UUID)
    */
-  async getAccount(keychain: string) {
-    const query = `
-      SELECT
-        ba.id,
-        ba.keychain,
-        ba.user_api_key,
-        ba.country,
-        ba.currency_iso3 as currency,
-        ba.bank_name,
-        ba.bank_account as account_number,
-        ba.bank_account_name as account_name,
-        ba.set_default,
-        ba.timestamp as created_at,
-        u.azer_id as user_id,
-        u.user_email,
-        u.first_name,
-        u.last_name,
-        u.phone,
-        u.verify_user as kyc_verified
-      FROM bank_account ba
-      LEFT JOIN send_coin_user u ON ba.user_api_key = u.api_key
-      WHERE ba.keychain = $1
-      LIMIT 1
-    `;
+  async getAccount(id: string) {
+    const wa = await this.prisma.client.wallet_accounts.findFirst({
+      where: { id },
+      include: { wallet: true },
+    });
+    if (!wa) return null;
 
-    const result = await this.prisma.client.$queryRawUnsafe<
-      Array<{
-        id: number;
-        keychain: string;
-        user_api_key: string;
-        country: string;
-        currency: string;
-        bank_name: string;
-        account_number: string;
-        account_name: string;
-        set_default: string | boolean;
-        created_at: Date;
-        user_id: number;
-        user_email: string;
-        first_name: string;
-        last_name: string;
-        phone: string;
-        kyc_verified: boolean;
-      }>
-    >(query, keychain);
-
-    if (result.length === 0) {
-      return null;
+    let user: { azer_id: number; user_email: string | null; first_name: string | null; last_name: string | null } | null = null;
+    if (wa.wallet.user_api_key) {
+      user = await this.prisma.client.send_coin_user.findFirst({
+        where: { api_key: wa.wallet.user_api_key },
+        select: { azer_id: true, user_email: true, first_name: true, last_name: true },
+      });
     }
 
-    const acc = result[0];
     return {
-      id: acc.id,
-      keychain: acc.keychain,
-      userId: acc.user_id,
-      userEmail: acc.user_email || 'Unknown',
-      userName: [acc.first_name, acc.last_name].filter(Boolean).join(' ') || 'Unknown',
-      userPhone: acc.phone,
-      userKycVerified: acc.kyc_verified || false,
-      country: acc.country,
-      currency: acc.currency,
-      bankName: acc.bank_name,
-      accountNumber: acc.account_number,
-      accountName: acc.account_name,
-      isDefault: acc.set_default === 'true' || acc.set_default === true,
-      isVerified: true,
-      isFlagged: false,
-      createdAt: acc.created_at,
+      id: wa.id,
+      accountNumber: wa.account_number,
+      accountName: wa.account_name,
+      bankName: wa.bank_name,
+      bankCode: wa.bank_code,
+      currency: wa.currency,
+      availableBalance: Number(wa.available_balance),
+      lockedBalance: Number(wa.locked_balance),
+      actualBalance: Number(wa.actual_balance),
+      userId: user?.azer_id ?? 0,
+      userEmail: user?.user_email ?? 'Unknown',
+      userName: [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Unknown',
+      createdAt: wa.created_at?.toISOString() ?? '',
     };
   }
 
   /**
-   * Get bank accounts for a specific user
+   * Get fiat accounts for a specific user (by azer_id)
    */
   async getUserAccounts(userId: number) {
-    const query = `
-      SELECT
-        ba.id,
-        ba.keychain,
-        ba.country,
-        ba.currency_iso3 as currency,
-        ba.bank_name,
-        ba.bank_account as account_number,
-        ba.bank_account_name as account_name,
-        ba.set_default,
-        ba.timestamp as created_at
-      FROM bank_account ba
-      JOIN send_coin_user u ON ba.user_api_key = u.api_key
-      WHERE u.azer_id = $1
-      ORDER BY ba.set_default DESC, ba.timestamp ASC
-    `;
+    const user = await this.prisma.client.send_coin_user.findFirst({
+      where: { azer_id: userId },
+      select: { api_key: true },
+    });
+    if (!user?.api_key) return [];
 
-    const accounts = await this.prisma.client.$queryRawUnsafe<
-      Array<{
-        id: number;
-        keychain: string;
-        country: string;
-        currency: string;
-        bank_name: string;
-        account_number: string;
-        account_name: string;
-        set_default: string | boolean;
-        created_at: Date;
-      }>
-    >(query, userId);
+    const wallet = await this.prisma.client.wallets.findFirst({
+      where: { user_api_key: user.api_key },
+    });
+    if (!wallet) return [];
 
-    return accounts.map((acc) => ({
-      id: acc.id,
-      keychain: acc.keychain,
-      country: acc.country,
-      currency: acc.currency,
-      bankName: acc.bank_name,
-      accountNumber: acc.account_number,
-      accountName: acc.account_name,
-      isDefault: acc.set_default === 'true' || acc.set_default === true,
-      createdAt: acc.created_at,
+    const rows = await this.prisma.client.wallet_accounts.findMany({
+      where: { wallet_id: wallet.id },
+      orderBy: { created_at: 'asc' },
+    });
+
+    return rows.map((wa) => ({
+      id: wa.id,
+      accountNumber: wa.account_number,
+      accountName: wa.account_name,
+      bankName: wa.bank_name,
+      bankCode: wa.bank_code,
+      currency: wa.currency,
+      availableBalance: Number(wa.available_balance),
+      lockedBalance: Number(wa.locked_balance),
+      actualBalance: Number(wa.actual_balance),
+      createdAt: wa.created_at?.toISOString() ?? '',
     }));
   }
 
   /**
-   * Delete a bank account (admin action)
+   * Delete a fiat account (admin action) - use with caution; CrayFi accounts are system-managed
    */
-  async deleteAccount(keychain: string, adminId: number) {
-    // First check if account exists
-    const account = await this.getAccount(keychain);
+  async deleteAccount(id: string, adminId: number) {
+    const account = await this.getAccount(id);
     if (!account) {
-      throw new Error('Bank account not found');
+      throw new Error('Fiat account not found');
     }
 
-    // Delete the account
-    await this.prisma.client.$queryRawUnsafe(
-      'DELETE FROM bank_account WHERE keychain = $1',
-      keychain,
-    );
+    await this.prisma.client.wallet_accounts.delete({
+      where: { id },
+    });
 
-    // Log the action
     await this.prisma.client.adminAuditLog.create({
       data: {
         adminId,
-        action: 'BANK_ACCOUNT_DELETED',
+        action: 'FIAT_ACCOUNT_DELETED',
         detail: {
-          resourceType: 'BANK_ACCOUNT',
-          resourceId: keychain,
+          resourceType: 'FIAT_ACCOUNT',
+          resourceId: id,
           userId: account.userId,
           userEmail: account.userEmail,
           accountNumber: account.accountNumber,

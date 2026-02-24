@@ -303,6 +303,7 @@ export class RolesService {
     return {
       id: role.id,
       title: role.title,
+      name: role.title, // Frontend expects name for dropdowns
       description: role.description,
       status: role.status,
       permissions, // Only granted permissions

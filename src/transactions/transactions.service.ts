@@ -169,10 +169,21 @@ export class TransactionsService {
       }),
     ]);
 
-    // Count by type (simplified - would need more complex logic for incoming/outgoing)
-    const incoming = 0; // TODO: Calculate based on user perspective
-    const outgoing = historyCompleted + transferCompleted + fiatCompleted;
-    const conversion = historyCompleted;
+    // Count by type based on transaction_type field
+    // In transaction_history: 'buy' = incoming (user receives crypto), 'sell' = outgoing
+    const [historyIncoming, historyOutgoing] = await Promise.all([
+      this.prisma.client.transaction_history.count({
+        where: { ...historyWhere, transaction_type: 'buy', status: 'completed' },
+      }),
+      this.prisma.client.transaction_history.count({
+        where: { ...historyWhere, transaction_type: 'sell', status: 'completed' },
+      }),
+    ]);
+
+    // Wallet transfers and fiat transfers are typically outgoing from the user's perspective
+    const incoming = historyIncoming;
+    const outgoing = historyOutgoing + transferCompleted + fiatCompleted;
+    const conversion = historyCompleted; // All buy/sell are conversions
 
     return {
       totalVolume: {
@@ -1758,11 +1769,18 @@ export class TransactionsService {
 
     const amountDisplay = `${Number(txRecord.amount)} ${txRecord.asset}`;
 
+    // Wallet transfers are outgoing from sender's perspective
+    // Since we're viewing from admin perspective, treat as OUTGOING (money leaving platform)
+    const transactionType = this.determineTransactionType(
+      { transaction_type: 'transfer' },
+      'transfer',
+    );
+
     return {
       id: txRecord.transfer_id,
       txId: txRecord.reference ?? undefined,
       reference: txRecord.reference ?? undefined,
-      type: 'OUTGOING', // TODO: Determine based on user perspective
+      type: transactionType,
       transactionCategory: 'WALLET_TRANSFER',
       dateInitiated: createdAt,
       currency: {

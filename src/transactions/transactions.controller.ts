@@ -42,7 +42,9 @@ import {
 } from './dto/transaction-response.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
+import { MfaActionGuard } from '../auth/mfa-action.guard';
 import { RequirePermission } from '../auth/require-permission.decorator';
+import { RequireMfa } from '../auth/require-mfa.decorator';
 import { Permission } from '../auth/permissions.enum';
 
 // Authenticated request type
@@ -53,7 +55,7 @@ interface AuthenticatedRequest extends Request {
 @ApiTags('Transactions')
 @ApiBearerAuth()
 @Controller('transactions')
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard, MfaActionGuard)
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
@@ -396,9 +398,10 @@ export class TransactionsController {
 
   @Post(':id/approve')
   @RequirePermission(Permission.VERIFY_TRANSACTIONS)
+  @RequireMfa()
   @ApiOperation({
     summary: 'Approve transaction',
-    description: 'Approves a transaction, setting its status to completed',
+    description: 'Approves a transaction, setting its status to completed. Requires MFA verification.',
   })
   @ApiParam({
     name: 'id',

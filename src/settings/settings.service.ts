@@ -20,67 +20,20 @@ export class SettingsService {
    * Get all system settings
    */
   async getAllSettings(): Promise<SystemSetting[]> {
-    const result = await this.prisma.client.$queryRaw<
-      Array<{
-        id: number;
-        setting_key: string;
-        setting_value: string;
-        setting_type: string;
-        description: string | null;
-        updated_by: string | null;
-        updated_at: Date | null;
-        created_at: Date;
-      }>
-    >`
-      SELECT * FROM system_settings ORDER BY setting_key ASC
-    `;
-
-    return result.map((s) => ({
-      id: s.id,
-      settingKey: s.setting_key,
-      settingValue: s.setting_value,
-      settingType: s.setting_type as SystemSetting['settingType'],
-      description: s.description,
-      updatedBy: s.updated_by,
-      updatedAt: s.updated_at,
-      createdAt: s.created_at,
-    }));
+    const rows = await this.prisma.client.systemSetting.findMany({
+      orderBy: { settingKey: 'asc' },
+    });
+    return rows.map((s) => this.toSystemSetting(s));
   }
 
   /**
    * Get a single setting by key
    */
   async getSetting(key: string): Promise<SystemSetting | null> {
-    const result = await this.prisma.client.$queryRaw<
-      Array<{
-        id: number;
-        setting_key: string;
-        setting_value: string;
-        setting_type: string;
-        description: string | null;
-        updated_by: string | null;
-        updated_at: Date | null;
-        created_at: Date;
-      }>
-    >`
-      SELECT * FROM system_settings WHERE setting_key = ${key} LIMIT 1
-    `;
-
-    if (result.length === 0) {
-      return null;
-    }
-
-    const s = result[0];
-    return {
-      id: s.id,
-      settingKey: s.setting_key,
-      settingValue: s.setting_value,
-      settingType: s.setting_type as SystemSetting['settingType'],
-      description: s.description,
-      updatedBy: s.updated_by,
-      updatedAt: s.updated_at,
-      createdAt: s.created_at,
-    };
+    const row = await this.prisma.client.systemSetting.findUnique({
+      where: { settingKey: key },
+    });
+    return row ? this.toSystemSetting(row) : null;
   }
 
   /**
@@ -91,35 +44,19 @@ export class SettingsService {
     value: string,
     adminId: number,
   ): Promise<SystemSetting> {
-    // Check if setting exists
     const existing = await this.getSetting(key);
     if (!existing) {
       throw new NotFoundException(`Setting '${key}' not found`);
     }
 
-    const result = await this.prisma.client.$queryRaw<
-      Array<{
-        id: number;
-        setting_key: string;
-        setting_value: string;
-        setting_type: string;
-        description: string | null;
-        updated_by: string | null;
-        updated_at: Date | null;
-        created_at: Date;
-      }>
-    >`
-      UPDATE system_settings
-      SET setting_value = ${value},
-          updated_by = ${String(adminId)},
-          updated_at = CURRENT_TIMESTAMP
-      WHERE setting_key = ${key}
-      RETURNING *
-    `;
+    const row = await this.prisma.client.systemSetting.update({
+      where: { settingKey: key },
+      data: {
+        settingValue: value,
+        updatedBy: String(adminId),
+      },
+    });
 
-    const s = result[0];
-
-    // Log the action
     await this.prisma.client.adminAuditLog.create({
       data: {
         adminId,
@@ -134,16 +71,7 @@ export class SettingsService {
       },
     });
 
-    return {
-      id: s.id,
-      settingKey: s.setting_key,
-      settingValue: s.setting_value,
-      settingType: s.setting_type as SystemSetting['settingType'],
-      description: s.description,
-      updatedBy: s.updated_by,
-      updatedAt: s.updated_at,
-      createdAt: s.created_at,
-    };
+    return this.toSystemSetting(row);
   }
 
   /**
@@ -156,32 +84,21 @@ export class SettingsService {
     description: string,
     adminId: number,
   ): Promise<SystemSetting> {
-    // Check if setting already exists
     const existing = await this.getSetting(key);
     if (existing) {
       throw new Error(`Setting '${key}' already exists`);
     }
 
-    const result = await this.prisma.client.$queryRaw<
-      Array<{
-        id: number;
-        setting_key: string;
-        setting_value: string;
-        setting_type: string;
-        description: string | null;
-        updated_by: string | null;
-        updated_at: Date | null;
-        created_at: Date;
-      }>
-    >`
-      INSERT INTO system_settings (setting_key, setting_value, setting_type, description, updated_by)
-      VALUES (${key}, ${value}, ${type}, ${description}, ${String(adminId)})
-      RETURNING *
-    `;
+    const row = await this.prisma.client.systemSetting.create({
+      data: {
+        settingKey: key,
+        settingValue: value,
+        settingType: type,
+        description,
+        updatedBy: String(adminId),
+      },
+    });
 
-    const s = result[0];
-
-    // Log the action
     await this.prisma.client.adminAuditLog.create({
       data: {
         adminId,
@@ -197,16 +114,7 @@ export class SettingsService {
       },
     });
 
-    return {
-      id: s.id,
-      settingKey: s.setting_key,
-      settingValue: s.setting_value,
-      settingType: s.setting_type as SystemSetting['settingType'],
-      description: s.description,
-      updatedBy: s.updated_by,
-      updatedAt: s.updated_at,
-      createdAt: s.created_at,
-    };
+    return this.toSystemSetting(row);
   }
 
   /**
@@ -218,11 +126,10 @@ export class SettingsService {
       throw new NotFoundException(`Setting '${key}' not found`);
     }
 
-    await this.prisma.client.$queryRaw`
-      DELETE FROM system_settings WHERE setting_key = ${key}
-    `;
+    await this.prisma.client.systemSetting.delete({
+      where: { settingKey: key },
+    });
 
-    // Log the action
     await this.prisma.client.adminAuditLog.create({
       data: {
         adminId,
@@ -257,5 +164,27 @@ export class SettingsService {
       default:
         return setting.settingValue as T;
     }
+  }
+
+  private toSystemSetting(row: {
+    id: number;
+    settingKey: string;
+    settingValue: string;
+    settingType: string;
+    description: string | null;
+    updatedBy: string | null;
+    updatedAt: Date | null;
+    createdAt: Date;
+  }): SystemSetting {
+    return {
+      id: row.id,
+      settingKey: row.settingKey,
+      settingValue: row.settingValue,
+      settingType: row.settingType as SystemSetting['settingType'],
+      description: row.description,
+      updatedBy: row.updatedBy,
+      updatedAt: row.updatedAt,
+      createdAt: row.createdAt,
+    };
   }
 }

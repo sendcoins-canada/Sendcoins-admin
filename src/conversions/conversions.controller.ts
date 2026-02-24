@@ -29,7 +29,9 @@ import {
 } from './dto/conversion-action.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
+import { MfaActionGuard } from '../auth/mfa-action.guard';
 import { RequirePermission } from '../auth/require-permission.decorator';
+import { RequireMfa } from '../auth/require-mfa.decorator';
 import { Permission } from '../auth/permissions.enum';
 
 interface AuthenticatedRequest {
@@ -39,7 +41,7 @@ interface AuthenticatedRequest {
 @ApiTags('Conversions')
 @ApiBearerAuth()
 @Controller('conversions')
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard, MfaActionGuard)
 export class ConversionsController {
   constructor(private readonly conversionsService: ConversionsService) {}
 
@@ -98,10 +100,11 @@ export class ConversionsController {
 
   @Post(':id/approve')
   @RequirePermission(Permission.VERIFY_TRANSACTIONS)
+  @RequireMfa()
   @ApiOperation({
     summary: 'Approve conversion',
     description:
-      'Approves a pending crypto-to-fiat conversion. Requires VERIFY_TRANSACTIONS permission.',
+      'Approves a pending crypto-to-fiat conversion. Requires VERIFY_TRANSACTIONS permission and MFA verification.',
   })
   @ApiParam({ name: 'id', type: Number, description: 'Conversion ID' })
   @ApiBody({ type: ApproveConversionDto })
@@ -127,10 +130,11 @@ export class ConversionsController {
 
   @Post(':id/reject')
   @RequirePermission(Permission.VERIFY_TRANSACTIONS)
+  @RequireMfa()
   @ApiOperation({
     summary: 'Reject conversion',
     description:
-      'Rejects a pending crypto-to-fiat conversion. Requires VERIFY_TRANSACTIONS permission.',
+      'Rejects a pending crypto-to-fiat conversion. Requires VERIFY_TRANSACTIONS permission and MFA verification.',
   })
   @ApiParam({ name: 'id', type: Number, description: 'Conversion ID' })
   @ApiBody({ type: RejectConversionDto })

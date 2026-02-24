@@ -179,12 +179,45 @@ export class PlatformService {
         0,
       );
 
+      // Build daily breakdown query
+      let dailyQuery = `
+        SELECT
+          DATE(created_at) as date,
+          COALESCE(SUM(amount), 0) as total_amount,
+          COALESCE(SUM(usd_equivalent), 0) as total_usd,
+          COUNT(*) as count
+        FROM platform_ledger
+        WHERE status IN ('collected', 'settled')
+      `;
+
+      if (conditions.length > 0) {
+        dailyQuery += ' AND ' + conditions.join(' AND ');
+      }
+
+      dailyQuery += ' GROUP BY DATE(created_at) ORDER BY date DESC LIMIT 30';
+
+      const dailyResult = await this.prisma.client.$queryRawUnsafe<
+        Array<{
+          date: Date;
+          total_amount: number;
+          total_usd: number;
+          count: bigint;
+        }>
+      >(dailyQuery);
+
+      const daily = dailyResult.map((row) => ({
+        date: row.date.toISOString().split('T')[0],
+        amount: String(row.total_amount || 0),
+        amountUsd: String(row.total_usd || 0),
+        count: Number(row.count),
+      }));
+
       return {
         period: startDate || 'month',
         totalRevenue: String(totalAmount),
         totalRevenueUsd: String(totalRevenueUsd),
         breakdown,
-        daily: [], // TODO: Add daily breakdown if needed
+        daily,
       };
     } catch {
       // Table might not exist

@@ -176,12 +176,17 @@ export class AuditLogsController {
       }),
     );
 
+    const totalPages = take > 0 ? Math.ceil(total / take) : 0;
+    const currentPage = take > 0 ? Math.floor(skip / take) + 1 : 1;
     return {
+      data: mapped,
       logs: mapped,
       pagination: {
         total,
         limit: take,
         offset: skip,
+        page: currentPage,
+        totalPages,
         hasMore: skip + take < total,
       },
     };
@@ -218,15 +223,18 @@ export class AuditLogsController {
           })
         : [];
     const adminMap = new Map(admins.map((a) => [a.id, a]));
-
+    const mappedByAdmin = logs.map((log) =>
+      mapLog({
+        ...log,
+        admin: log.adminId ? adminMap.get(log.adminId) ?? null : null,
+      }),
+    );
+    const totalPages = take > 0 ? Math.ceil(total / take) : 0;
+    const page = take > 0 ? Math.floor(skip / take) + 1 : 1;
     return {
-      logs: logs.map((log) =>
-        mapLog({
-          ...log,
-          admin: log.adminId ? adminMap.get(log.adminId) ?? null : null,
-        }),
-      ),
-      pagination: { total, limit: take, offset: skip, hasMore: skip + take < total },
+      data: mappedByAdmin,
+      logs: mappedByAdmin,
+      pagination: { total, limit: take, offset: skip, page, totalPages, hasMore: skip + take < total },
     };
   }
 
@@ -274,15 +282,18 @@ export class AuditLogsController {
           })
         : [];
     const adminMap = new Map(admins.map((a) => [a.id, a]));
-
+    const mappedByResource = logs.map((log) =>
+      mapLog({
+        ...log,
+        admin: log.adminId ? adminMap.get(log.adminId) ?? null : null,
+      }),
+    );
+    const totalPages = take > 0 ? Math.ceil(total / take) : 0;
+    const pageNum = take > 0 ? Math.floor(skip / take) + 1 : 1;
     return {
-      logs: logs.map((log) =>
-        mapLog({
-          ...log,
-          admin: log.adminId ? adminMap.get(log.adminId) ?? null : null,
-        }),
-      ),
-      pagination: { total, limit: take, offset: skip, hasMore: skip + take < total },
+      data: mappedByResource,
+      logs: mappedByResource,
+      pagination: { total, limit: take, offset: skip, page: pageNum, totalPages, hasMore: skip + take < total },
     };
   }
 
