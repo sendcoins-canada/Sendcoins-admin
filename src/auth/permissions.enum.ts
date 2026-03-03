@@ -39,6 +39,9 @@ export enum Permission {
   // Notifications
   READ_NOTIFICATIONS = 'READ_NOTIFICATIONS',
   MANAGE_NOTIFICATION_SETTINGS = 'MANAGE_NOTIFICATION_SETTINGS',
+
+  // Communications
+  SEND_EMAILS = 'SEND_EMAILS',
 }
 
 /**
@@ -147,5 +150,10 @@ export const PERMISSION_METADATA: Record<
     label: 'Manage notification settings',
     category: 'Notifications',
     description: 'Configure notification preferences and settings',
+  },
+  [Permission.SEND_EMAILS]: {
+    label: 'Send emails',
+    category: 'Communications',
+    description: 'Compose and send broadcast emails to users/admins',
   },
 };

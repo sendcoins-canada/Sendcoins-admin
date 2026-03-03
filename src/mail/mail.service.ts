@@ -55,6 +55,12 @@ export class MailService implements OnModuleInit {
       `[send] to=${JSON.stringify(options.to)} from=${JSON.stringify(options.from)} subject=${options.subject}`,
     );
 
+    // If attachments are present, go straight to fallback SMTP (Zepto REST helper here is HTML/text-only)
+    if (options.attachments && (options.attachments as unknown[]).length > 0) {
+      this.logger.log('[send] Attachments detected, using fallback SMTP directly');
+      return this.sendViaFallback(options);
+    }
+
     // 1) Try Zepto REST API first (bypasses SMTP 535 issues)
     if (this.hasZeptoCreds) {
       this.logger.log('[send] Trying Zepto REST API first');
@@ -312,6 +318,7 @@ SendCoins Team`,
     html?: string;
     from?: string;
     fromName?: string;
+    attachments?: nodemailer.SendMailOptions['attachments'];
   }): Promise<boolean> {
     const fromRaw = options.from ?? process.env.MAIL_FROM ?? 'noreply@sendcoins.ca';
     // Extract raw address from RFC format (e.g. "Name" <addr> -> addr) to avoid double-nesting
@@ -330,6 +337,7 @@ SendCoins Team`,
       subject: options.subject,
       text: options.text ?? undefined,
       html: options.html ?? undefined,
+      attachments: options.attachments,
     });
   }
 

@@ -13,7 +13,7 @@ export class EmailsController {
   constructor(private readonly emailsService: EmailsService) {}
 
   @Post('send')
-  @RequirePermission(Permission.MANAGE_ADMINS)
+  @RequirePermission(Permission.SEND_EMAILS)
   async send(@Body() dto: SendEmailDto, @Request() req: { user: { id: number } }) {
     return this.emailsService.sendAndSave(dto, req.user.id);
   }

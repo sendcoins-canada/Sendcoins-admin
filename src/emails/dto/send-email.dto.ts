@@ -32,4 +32,9 @@ export class SendEmailDto {
   @IsString()
   @MaxLength(255)
   fromName?: string;
+
+  // Attachments: array of { filename, contentBase64, contentType? }
+  @IsOptional()
+  @IsArray()
+  attachments?: { filename: string; contentBase64: string; contentType?: string }[];
 }

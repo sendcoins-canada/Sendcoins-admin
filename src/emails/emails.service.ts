@@ -26,6 +26,11 @@ export class EmailsService {
       text: dto.bodyText ?? undefined,
       html: dto.bodyHtml ?? undefined,
       fromName: dto.fromName ?? undefined,
+      attachments: dto.attachments?.map((a) => ({
+        filename: a.filename,
+        content: Buffer.from(a.contentBase64, 'base64'),
+        contentType: a.contentType,
+      })),
     });
 
     const record = await this.prisma.client.adminSentEmail.create({

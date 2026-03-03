@@ -70,10 +70,10 @@ export class DashboardService {
         COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed,
         COUNT(CASE WHEN is_flagged = true THEN 1 END) as flagged,
         COALESCE(SUM(CASE WHEN status = 'completed' THEN CAST(crypto_amount AS DECIMAL) END), 0) as total_crypto_volume,
-        COALESCE(SUM(CASE WHEN status = 'completed' THEN CAST(fiat_amount AS DECIMAL) END), 0) as total_fiat_volume,
-        COUNT(CASE WHEN timestamp >= NOW() - INTERVAL '30 days' THEN 1 END) as this_month,
-        COUNT(CASE WHEN timestamp >= NOW() - INTERVAL '7 days' THEN 1 END) as this_week,
-        COUNT(CASE WHEN timestamp >= NOW() - INTERVAL '1 day' THEN 1 END) as today
+        COALESCE(SUM(CASE WHEN status = 'completed' THEN CAST(currency_amount AS DECIMAL) END), 0) as total_fiat_volume,
+        COUNT(CASE WHEN created_at_timestamp >= NOW() - INTERVAL '30 days' THEN 1 END) as this_month,
+        COUNT(CASE WHEN created_at_timestamp >= NOW() - INTERVAL '7 days' THEN 1 END) as this_week,
+        COUNT(CASE WHEN created_at_timestamp >= NOW() - INTERVAL '1 day' THEN 1 END) as today
       FROM transaction_history
     `;
 
@@ -224,18 +224,18 @@ export class DashboardService {
     switch (period) {
       case 'week':
         interval = '7 days';
-        groupBy = 'DATE(timestamp)';
+        groupBy = 'DATE(created_at_timestamp)';
         dateFormat = 'YYYY-MM-DD';
         break;
       case 'year':
         interval = '365 days';
-        groupBy = "DATE_TRUNC('month', timestamp)";
+        groupBy = "DATE_TRUNC('month', created_at_timestamp)";
         dateFormat = 'YYYY-MM';
         break;
       case 'month':
       default:
         interval = '30 days';
-        groupBy = 'DATE(timestamp)';
+        groupBy = 'DATE(created_at_timestamp)';
         dateFormat = 'YYYY-MM-DD';
         break;
     }
@@ -245,9 +245,9 @@ export class DashboardService {
       SELECT
         TO_CHAR(${groupBy}, '${dateFormat}') as date,
         COUNT(*) as count,
-        COALESCE(SUM(CAST(fiat_amount AS DECIMAL)), 0) as volume
+        COALESCE(SUM(CAST(currency_amount AS DECIMAL)), 0) as volume
       FROM transaction_history
-      WHERE timestamp >= NOW() - INTERVAL '${interval}'
+      WHERE created_at_timestamp >= NOW() - INTERVAL '${interval}'
       GROUP BY ${groupBy}
       ORDER BY ${groupBy}
     `;

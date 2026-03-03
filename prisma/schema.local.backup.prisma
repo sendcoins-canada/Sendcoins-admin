@@ -748,6 +748,7 @@ enum Permission {
   FREEZE_WALLETS
   READ_AUDIT_LOGS
   VERIFY_KYC
+  SEND_EMAILS
 }
 
 enum RoleStatus {

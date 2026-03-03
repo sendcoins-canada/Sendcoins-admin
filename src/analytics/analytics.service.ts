@@ -17,11 +17,11 @@ export class AnalyticsService {
     let paramIndex = 1;
 
     if (startDate) {
-      dateFilter += ` AND timestamp >= $${paramIndex++}::timestamp`;
+      dateFilter += ` AND created_at_timestamp >= $${paramIndex++}::timestamp`;
       params.push(startDate);
     }
     if (endDate) {
-      dateFilter += ` AND timestamp <= $${paramIndex++}::timestamp`;
+      dateFilter += ` AND created_at_timestamp <= $${paramIndex++}::timestamp`;
       params.push(endDate);
     }
 
@@ -30,16 +30,16 @@ export class AnalyticsService {
 
     switch (groupBy) {
       case 'week':
-        dateGrouping = "DATE_TRUNC('week', timestamp)";
+        dateGrouping = "DATE_TRUNC('week', created_at_timestamp)";
         dateFormat = 'YYYY-WW';
         break;
       case 'month':
-        dateGrouping = "DATE_TRUNC('month', timestamp)";
+        dateGrouping = "DATE_TRUNC('month', created_at_timestamp)";
         dateFormat = 'YYYY-MM';
         break;
       case 'day':
       default:
-        dateGrouping = 'DATE(timestamp)';
+        dateGrouping = 'DATE(created_at_timestamp)';
         dateFormat = 'YYYY-MM-DD';
         break;
     }
@@ -50,8 +50,8 @@ export class AnalyticsService {
         TO_CHAR(${dateGrouping}, '${dateFormat}') as period,
         COUNT(*) as transaction_count,
         COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count,
-        COALESCE(SUM(CAST(fiat_amount AS DECIMAL)), 0) as total_volume,
-        COALESCE(SUM(CASE WHEN status = 'completed' THEN CAST(fiat_amount AS DECIMAL) END), 0) as completed_volume
+        COALESCE(SUM(CAST(currency_amount AS DECIMAL)), 0) as total_volume,
+        COALESCE(SUM(CASE WHEN status = 'completed' THEN CAST(currency_amount AS DECIMAL) END), 0) as completed_volume
       FROM transaction_history
       WHERE 1=1 ${dateFilter}
       GROUP BY ${dateGrouping}
@@ -84,7 +84,7 @@ export class AnalyticsService {
       SELECT
         transaction_type,
         COUNT(*) as count,
-        COALESCE(SUM(CAST(fiat_amount AS DECIMAL)), 0) as volume
+        COALESCE(SUM(CAST(currency_amount AS DECIMAL)), 0) as volume
       FROM transaction_history
       WHERE 1=1 ${dateFilter}
       GROUP BY transaction_type
@@ -124,7 +124,7 @@ export class AnalyticsService {
         crypto_type,
         COUNT(*) as count,
         COALESCE(SUM(CAST(crypto_amount AS DECIMAL)), 0) as crypto_volume,
-        COALESCE(SUM(CAST(fiat_amount AS DECIMAL)), 0) as fiat_volume
+        COALESCE(SUM(CAST(currency_amount AS DECIMAL)), 0) as fiat_volume
       FROM transaction_history
       WHERE 1=1 ${dateFilter}
       GROUP BY crypto_type
@@ -413,35 +413,41 @@ export class AnalyticsService {
         u.first_name,
         u.last_name,
         u.country,
-        COUNT(t.transaction_id) as transaction_count,
-        COALESCE(SUM(CAST(t.fiat_amount AS DECIMAL)), 0) as total_volume
+        COUNT(t.history_id) as transaction_count,
+        COALESCE(SUM(CAST(t.currency_amount AS DECIMAL)), 0) as total_volume
       FROM send_coin_user u
       LEFT JOIN transaction_history t ON u.api_key = t.user_api_key
       GROUP BY u.azer_id, u.user_email, u.first_name, u.last_name, u.country
-      HAVING COUNT(t.transaction_id) > 0
+      HAVING COUNT(t.history_id) > 0
       ORDER BY ${orderBy}
       LIMIT $1
     `;
 
-    const data = await this.prisma.client.$queryRawUnsafe<
-      Array<{
-        azer_id: number;
-        user_email: string | null;
-        first_name: string | null;
-        last_name: string | null;
-        country: string | null;
-        transaction_count: bigint;
-        total_volume: string;
-      }>
-    >(query, limit);
+    try {
+      const data = await this.prisma.client.$queryRawUnsafe<
+        Array<{
+          azer_id: number;
+          user_email: string | null;
+          first_name: string | null;
+          last_name: string | null;
+          country: string | null;
+          transaction_count: bigint;
+          total_volume: string;
+        }>
+      >(query, limit);
 
-    return data.map((d) => ({
-      userId: d.azer_id,
-      email: d.user_email,
-      name: `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'N/A',
-      country: d.country,
-      transactionCount: Number(d.transaction_count),
-      totalVolume: d.total_volume,
-    }));
+      return data.map((d) => ({
+        userId: d.azer_id,
+        email: d.user_email,
+        name: `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'N/A',
+        country: d.country,
+        transactionCount: Number(d.transaction_count),
+        totalVolume: d.total_volume,
+      }));
+    } catch (error) {
+      // If the legacy tables/indexes are missing or schema differs, don't crash the API
+      console.error('[Analytics] getTopUsers error:', error);
+      return [];
+    }
   }
 }
