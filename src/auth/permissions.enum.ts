@@ -42,6 +42,10 @@ export enum Permission {
 
   // Communications
   SEND_EMAILS = 'SEND_EMAILS',
+
+  // Rate management
+  READ_RATES = 'READ_RATES',
+  UPDATE_RATES = 'UPDATE_RATES',
 }
 
 /**
@@ -155,5 +159,15 @@ export const PERMISSION_METADATA: Record<
     label: 'Send emails',
     category: 'Communications',
     description: 'Compose and send broadcast emails to users/admins',
+  },
+  [Permission.READ_RATES]: {
+    label: 'Read rates',
+    category: 'Rate Management',
+    description: 'View currency exchange rates',
+  },
+  [Permission.UPDATE_RATES]: {
+    label: 'Update rates',
+    category: 'Rate Management',
+    description: 'Update buying and selling rates',
   },
 };

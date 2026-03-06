@@ -4,6 +4,21 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
+  // Add new enum values if they don't exist (safe to run multiple times)
+  await prisma.$executeRawUnsafe(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'READ_RATES' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'Permission')) THEN
+        ALTER TYPE "Permission" ADD VALUE 'READ_RATES';
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'UPDATE_RATES' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'Permission')) THEN
+        ALTER TYPE "Permission" ADD VALUE 'UPDATE_RATES';
+      END IF;
+    END
+    $$;
+  `);
+  console.log('Ensured rate permissions exist in enum');
+
   // Create departments first
   const engineeringDept = await prisma.department.upsert({
     where: { id: 1 },
@@ -98,6 +113,27 @@ async function main() {
     },
     include: { permissions: true },
   });
+
+  // Ensure Super Admin role always has ALL current permissions
+  // This handles cases where new Permission enum values are added after initial seed.
+  const currentSuperAdminPermissions = superAdminRole.permissions.map(
+    (p) => p.permission,
+  );
+
+  const missingPermissions = allPermissions.filter(
+    (permission) => !currentSuperAdminPermissions.includes(permission),
+  );
+
+  if (missingPermissions.length > 0) {
+    await prisma.rolePermission.createMany({
+      data: missingPermissions.map((permission) => ({
+        roleId: superAdminRole.id,
+        permission,
+        isActive: true,
+      })),
+      skipDuplicates: true,
+    });
+  }
 
   // Update super admin user to have the Super Admin role
   await prisma.adminUser.update({

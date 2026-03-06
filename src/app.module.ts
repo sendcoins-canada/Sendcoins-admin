@@ -21,6 +21,7 @@ import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
 import { MerchantsModule } from './merchants/merchants.module';
 import { SettingsModule } from './settings/settings.module';
 import { EmailsModule } from './emails/emails.module';
+import { RatesModule } from './rates/rates.module';
 // import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { GlobalAuthGuard } from './auth/global-auth.guard';
@@ -47,6 +48,7 @@ import { GlobalAuthGuard } from './auth/global-auth.guard';
     MerchantsModule,
     SettingsModule,
     EmailsModule,
+    RatesModule,
     // ThrottlerModule.forRoot([
     //   {
     //     ttl: 60_000,
