@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { IsNumber, IsOptional } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export interface CurrencyRate {
   currency_name: string;
@@ -15,9 +17,41 @@ export interface CurrencyRate {
 }
 
 export class UpdateRateDto {
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
   buying_rate?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
   selling_rate?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
   market_rate?: number;
+}
+
+export interface RateHistoryItem {
+  id: number;
+  admin: {
+    id: number;
+    email: string;
+    name: string;
+  };
+  before: {
+    buying_rate: number | null;
+    selling_rate: number | null;
+    market_rate: number | null;
+  } | null;
+  after: {
+    buying_rate: number | null;
+    selling_rate: number | null;
+    market_rate: number | null;
+  } | null;
+  changedFields: string[];
+  createdAt: Date;
 }
 
 @Injectable()
@@ -93,12 +127,12 @@ export class RatesService {
       throw new Error('At least one rate must be provided');
     }
 
-    // Execute update using raw SQL
+    // Execute update using raw SQL (columns are VARCHAR in database)
     await this.prisma.client.$executeRaw`
       UPDATE currency
-      SET buying_rate = COALESCE(${data.buying_rate ?? null}::numeric, buying_rate),
-          selling_rate = COALESCE(${data.selling_rate ?? null}::numeric, selling_rate),
-          market_rate = COALESCE(${data.market_rate ?? null}::numeric, market_rate)
+      SET buying_rate = COALESCE(${data.buying_rate?.toString() ?? null}, buying_rate),
+          selling_rate = COALESCE(${data.selling_rate?.toString() ?? null}, selling_rate),
+          market_rate = COALESCE(${data.market_rate?.toString() ?? null}, market_rate)
       WHERE UPPER(currency_init) = UPPER(${currencyInit})
     `;
 
@@ -136,5 +170,53 @@ export class RatesService {
     });
 
     return { data: updated, beforeData, afterData };
+  }
+
+  /**
+   * Get rate change history for a currency
+   */
+  async getRateHistory(currencyInit: string, limit = 50): Promise<RateHistoryItem[]> {
+    const logs = await this.prisma.client.adminAuditLog.findMany({
+      where: {
+        action: 'RATE_UPDATED',
+        detail: {
+          path: ['currency_init'],
+          equals: currencyInit.toUpperCase(),
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit,
+    });
+
+    // Get admin details for each log
+    const adminIds = [...new Set(logs.map((log) => log.adminId).filter(Boolean))];
+    const admins = adminIds.length > 0
+      ? await this.prisma.client.adminUser.findMany({
+          where: { id: { in: adminIds as number[] } },
+          select: { id: true, email: true, firstName: true, lastName: true },
+        })
+      : [];
+
+    const adminMap = new Map(admins.map((a) => [a.id, a]));
+
+    return logs.map((log) => {
+      const admin = log.adminId ? adminMap.get(log.adminId) : null;
+      const detail = log.detail as Record<string, unknown> | null;
+
+      return {
+        id: log.id,
+        admin: {
+          id: log.adminId ?? 0,
+          email: admin?.email ?? 'Unknown',
+          name: admin ? `${admin.firstName} ${admin.lastName}`.trim() : 'Unknown',
+        },
+        before: (detail?.before as RateHistoryItem['before']) ?? null,
+        after: (detail?.after as RateHistoryItem['after']) ?? null,
+        changedFields: [],
+        createdAt: log.createdAt,
+      };
+    });
   }
 }

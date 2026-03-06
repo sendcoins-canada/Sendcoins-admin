@@ -4,11 +4,12 @@ import {
   Patch,
   Param,
   Body,
+  Query,
   UseGuards,
   Request,
   BadRequestException,
 } from '@nestjs/common';
-import { RatesService, UpdateRateDto } from './rates.service';
+import { RatesService, UpdateRateDto, RateHistoryItem } from './rates.service';
 import type { CurrencyRate } from './rates.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -33,6 +34,23 @@ export class RatesController {
   }
 
   /**
+   * Get rate change history for a currency
+   * NOTE: This must be defined BEFORE :currencyInit to avoid route conflicts
+   */
+  @Get('history/:currencyInit')
+  @RequirePermission(Permission.READ_RATES)
+  async getRateHistory(
+    @Param('currencyInit') currencyInit: string,
+    @Query('limit') limit?: string,
+  ): Promise<{ success: boolean; data: RateHistoryItem[] }> {
+    const history = await this.ratesService.getRateHistory(
+      currencyInit,
+      limit ? parseInt(limit, 10) : 50,
+    );
+    return { success: true, data: history };
+  }
+
+  /**
    * Get a single currency rate by currency_init (e.g., 'NGN', 'USD')
    */
   @Get(':currencyInit')
@@ -54,7 +72,13 @@ export class RatesController {
     @Param('currencyInit') currencyInit: string,
     @Body() body: UpdateRateDto,
     @Request() req: { user: { id: number } },
-  ): Promise<{ success: boolean; message: string; data: CurrencyRate }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: CurrencyRate;
+    beforeData?: UpdateRateDto;
+    afterData?: UpdateRateDto;
+  }> {
     // Validate input
     if (
       body.buying_rate === undefined &&
@@ -83,6 +107,8 @@ export class RatesController {
       success: true,
       message: 'Rate updated successfully',
       data: result.data,
+      beforeData: result.beforeData,
+      afterData: result.afterData,
     };
   }
 }
