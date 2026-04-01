@@ -181,7 +181,7 @@ async function main() {
     create: {
       id: 2,
       title: 'Support Agent',
-      description: 'Read-only access for customer support',
+      description: 'Customer support with email access',
       status: RoleStatus.ACTIVE,
       createdById: superAdmin.id,
       permissions: {
@@ -189,6 +189,7 @@ async function main() {
           { permission: Permission.READ_USERS, isActive: true },
           { permission: Permission.READ_TRANSACTIONS, isActive: true },
           { permission: Permission.READ_WALLETS, isActive: true },
+          { permission: Permission.SEND_EMAILS, isActive: true },
         ],
       },
     },

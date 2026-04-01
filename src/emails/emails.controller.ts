@@ -19,7 +19,7 @@ export class EmailsController {
   }
 
   @Get()
-  @RequirePermission(Permission.VIEW_ANALYTICS)
+  @RequirePermission(Permission.SEND_EMAILS)
   async list(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -33,7 +33,7 @@ export class EmailsController {
   }
 
   @Get(':id')
-  @RequirePermission(Permission.VIEW_ANALYTICS)
+  @RequirePermission(Permission.SEND_EMAILS)
   async getOne(@Param('id') id: string) {
     const numId = parseInt(id, 10);
     if (Number.isNaN(numId)) return null;
