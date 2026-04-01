@@ -14,7 +14,12 @@ import basicAuth from 'express-basic-auth';
 dotenv.config();
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+
+  // Increase body size limit (default 100KB is too small for bulk email sends)
+  const bodyParser = require('body-parser');
+  app.use(bodyParser.json({ limit: '5mb' }));
+  app.use(bodyParser.urlencoded({ limit: '5mb', extended: true }));
 
   // Global exception filter for consistent error responses
   app.useGlobalFilters(new GlobalExceptionFilter());
