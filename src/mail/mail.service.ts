@@ -55,12 +55,6 @@ export class MailService implements OnModuleInit {
       `[send] to=${JSON.stringify(options.to)} from=${JSON.stringify(options.from)} subject=${options.subject}`,
     );
 
-    // If attachments are present, go straight to fallback SMTP (Zepto REST helper here is HTML/text-only)
-    if (options.attachments && (options.attachments as unknown[]).length > 0) {
-      this.logger.log('[send] Attachments detected, using fallback SMTP directly');
-      return this.sendViaFallback(options);
-    }
-
     // 1) Try Zepto REST API first (bypasses SMTP 535 issues)
     if (this.hasZeptoCreds) {
       this.logger.log('[send] Trying Zepto REST API first');
@@ -126,6 +120,30 @@ export class MailService implements OnModuleInit {
     const bccList = this.parseTo(options.bcc);
     if (bccList.length > 0) {
       body.bcc = bccList.filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.address)).map((e) => ({ email_address: { address: e.address, name: e.name || e.address } }));
+    }
+
+    // Attachments — convert nodemailer format to Zepto REST API format
+    if (options.attachments && (options.attachments as unknown[]).length > 0) {
+      const attachments: { name: string; content: string; mime_type: string }[] = [];
+      for (const att of options.attachments as Array<{ filename?: string; content?: Buffer | string; contentType?: string; cid?: string }>) {
+        let base64: string;
+        if (Buffer.isBuffer(att.content)) {
+          base64 = att.content.toString('base64');
+        } else if (typeof att.content === 'string') {
+          base64 = att.content;
+        } else {
+          continue;
+        }
+        attachments.push({
+          name: att.filename ?? 'attachment',
+          content: base64,
+          mime_type: att.contentType ?? 'application/octet-stream',
+        });
+      }
+      if (attachments.length > 0) {
+        body.attachments = attachments;
+        this.logger.log(`[Zepto API] attachments count=${attachments.length}, names=[${attachments.map((a) => a.name).join(', ')}]`);
+      }
     }
 
     this.logger.log(
