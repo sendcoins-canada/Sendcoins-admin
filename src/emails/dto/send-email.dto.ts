@@ -26,10 +26,11 @@ function toEmailArray(value: unknown): string[] {
 }
 
 export class SendEmailDto {
+  @IsOptional()
   @Transform(({ value }) => toEmailArray(value))
   @IsArray()
   @IsEmail({}, { each: true })
-  to!: string[];
+  to?: string[];
 
   @IsOptional()
   @Transform(({ value }) => (value ? toEmailArray(value) : undefined))

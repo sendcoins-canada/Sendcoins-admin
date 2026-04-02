@@ -19,7 +19,7 @@ export class EmailsService {
       : fromEmail;
 
     const sent = await this.mailService.sendCustomEmail({
-      to: dto.to,
+      to: dto.to?.length ? dto.to : [],
       cc: dto.cc?.length ? dto.cc : undefined,
       bcc: dto.bcc?.length ? dto.bcc : undefined,
       subject: dto.subject,
@@ -37,7 +37,7 @@ export class EmailsService {
       data: {
         fromEmail: fromAddr,
         fromName: dto.fromName ?? null,
-        toEmails: dto.to,
+        toEmails: dto.to ?? [],
         ccEmails: dto.cc ?? [],
         bccEmails: dto.bcc ?? [],
         subject: dto.subject,

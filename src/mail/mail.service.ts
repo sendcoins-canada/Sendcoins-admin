@@ -83,8 +83,17 @@ export class MailService implements OnModuleInit {
       `[Zepto API] parsed from=${from ? `${from.name}<${from.address}>` : 'null'}, toCount=${toList.length}, toAddresses=[${toList.map((t) => t.address).join(', ')}]`,
     );
 
-    if (!from || toList.length === 0) {
-      this.logger.warn(`[Zepto API] invalid from/to (from=${!!from}, toCount=${toList.length})`);
+    const ccList = this.parseTo(options.cc);
+    const bccList = this.parseTo(options.bcc);
+
+    if (!from) {
+      this.logger.warn(`[Zepto API] invalid from address`);
+      return false;
+    }
+
+    // Allow send if there's at least one recipient across to/cc/bcc
+    if (toList.length === 0 && ccList.length === 0 && bccList.length === 0) {
+      this.logger.warn('[Zepto API] no recipients in to, cc, or bcc');
       return false;
     }
 
@@ -100,24 +109,17 @@ export class MailService implements OnModuleInit {
 
     this.logger.log(`[Zepto API] toPayload length=${toPayload.length}, first=${toPayload[0] ? JSON.stringify(toPayload[0]) : 'none'}`);
 
-    if (toPayload.length === 0) {
-      this.logger.warn('[Zepto API] no valid recipient addresses after filter');
-      return false;
-    }
-
     const body: Record<string, unknown> = {
       from: { address: from.address, name: from.name },
-      to: toPayload,
+      to: toPayload.length > 0 ? toPayload : undefined,
       subject: String(options.subject ?? ''),
     };
     if (options.html) body.htmlbody = options.html;
     if (options.text) body.textbody = options.text;
     if (!body.htmlbody && !body.textbody) body.textbody = '';
-    const ccList = this.parseTo(options.cc);
     if (ccList.length > 0) {
       body.cc = ccList.filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.address)).map((e) => ({ email_address: { address: e.address, name: e.name || e.address } }));
     }
-    const bccList = this.parseTo(options.bcc);
     if (bccList.length > 0) {
       body.bcc = bccList.filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.address)).map((e) => ({ email_address: { address: e.address, name: e.name || e.address } }));
     }
