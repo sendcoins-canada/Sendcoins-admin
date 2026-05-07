@@ -48,6 +48,24 @@ export class EmailsController {
     });
   }
 
+  @Get('campaigns/stats')
+  @RequirePermission(Permission.SEND_EMAILS)
+  async campaignStats() {
+    return this.emailsService.getCampaignStats();
+  }
+
+  @Post('campaigns/unverified')
+  @RequirePermission(Permission.SEND_EMAILS)
+  async sendUnverifiedReminders(@Request() req: { user: { id: number } }) {
+    return this.emailsService.sendUnverifiedReminders(req.user.id);
+  }
+
+  @Post('campaigns/inactive')
+  @RequirePermission(Permission.SEND_EMAILS)
+  async sendInactiveOutreach(@Request() req: { user: { id: number } }) {
+    return this.emailsService.sendInactiveOutreach(req.user.id);
+  }
+
   @Get(':id')
   @RequirePermission(Permission.SEND_EMAILS)
   async getOne(@Param('id') id: string) {

@@ -112,4 +112,177 @@ export class EmailsService {
       createdAt: row.createdAt.toISOString(),
     };
   }
+
+  // ---------------------------------------------------------------------------
+  // Campaign helpers
+  // ---------------------------------------------------------------------------
+
+  async getCampaignStats() {
+    const [unverified, inactive] = await Promise.all([
+      this.prisma.client.$queryRawUnsafe<[{ count: bigint }]>(
+        `SELECT COUNT(*) as count FROM send_coin_user
+         WHERE (verify_user IS NULL OR verify_user = false)
+         AND account_ban = 'false'
+         AND user_email IS NOT NULL`,
+      ),
+      this.prisma.client.$queryRawUnsafe<[{ count: bigint }]>(
+        `SELECT COUNT(*) as count FROM send_coin_user u
+         WHERE account_ban = 'false'
+         AND user_email IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM transaction_history th WHERE th.user_api_key = u.api_key)
+         AND NOT EXISTS (SELECT 1 FROM wallet_transfers wt WHERE wt.user_api_key = u.api_key)
+         AND NOT EXISTS (SELECT 1 FROM fiat_bank_transfers fbt WHERE fbt.user_api_key = u.api_key)`,
+      ),
+    ]);
+    return {
+      unverified: Number(unverified[0]?.count ?? 0),
+      inactive: Number(inactive[0]?.count ?? 0),
+    };
+  }
+
+  async sendUnverifiedReminders(adminId: number) {
+    const users = await this.prisma.client.$queryRawUnsafe<
+      Array<{ user_email: string; first_name: string | null }>
+    >(
+      `SELECT user_email, first_name FROM send_coin_user
+       WHERE (verify_user IS NULL OR verify_user = false)
+       AND account_ban = 'false'
+       AND user_email IS NOT NULL`,
+    );
+
+    if (!users.length) return { sent: false, count: 0 };
+
+    const fromEmail = process.env.MAIL_FROM ?? 'noreply@sendcoins.ca';
+    const fromAddr = fromEmail.includes('<')
+      ? fromEmail.replace(/^[^<]*<([^>]+)>.*$/, '$1').trim()
+      : fromEmail;
+
+    const subject = 'Complete your Sendcoins account verification';
+    const buildHtml = (firstName: string | null) => `
+      <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px">
+        <h2 style="color:#1a1a2e">Hi ${firstName ?? 'there'} 👋</h2>
+        <p style="color:#444;line-height:1.6">
+          You signed up for Sendcoins but haven't verified your account yet.
+          Verification takes less than 2 minutes and unlocks sending, converting,
+          and withdrawing crypto.
+        </p>
+        <a href="${process.env.ADMIN_FRONTEND_URL?.replace('admin.', '') ?? 'https://app.sendcoins.ca'}/kyc"
+           style="display:inline-block;margin:16px 0;padding:12px 28px;background:#4f46e5;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
+          Verify my account →
+        </a>
+        <p style="color:#888;font-size:13px">
+          If you didn't create this account, you can safely ignore this email.
+        </p>
+      </div>`;
+
+    let sentCount = 0;
+    for (const user of users) {
+      try {
+        await this.mailService.sendCustomEmail({
+          to: [user.user_email],
+          subject,
+          html: buildHtml(user.first_name),
+          fromName: 'Sendcoins',
+        });
+        sentCount++;
+      } catch (err) {
+        this.logger.warn(`Failed to send unverified reminder to ${user.user_email}: ${err}`);
+      }
+    }
+
+    const emails = users.map((u) => u.user_email);
+    await this.prisma.client.adminSentEmail.create({
+      data: {
+        fromEmail: fromAddr,
+        fromName: 'Sendcoins',
+        toEmails: emails,
+        ccEmails: [],
+        bccEmails: [],
+        subject,
+        bodyText: null,
+        bodyHtml: buildHtml(null),
+        status: sentCount > 0 ? 'sent' : 'failed',
+        sentAt: sentCount > 0 ? new Date() : null,
+        createdById: adminId,
+      },
+    });
+
+    return { sent: sentCount > 0, count: sentCount, total: users.length };
+  }
+
+  async sendInactiveOutreach(adminId: number) {
+    const users = await this.prisma.client.$queryRawUnsafe<
+      Array<{ user_email: string; first_name: string | null }>
+    >(
+      `SELECT u.user_email, u.first_name FROM send_coin_user u
+       WHERE u.account_ban = 'false'
+       AND u.user_email IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM transaction_history th WHERE th.user_api_key = u.api_key)
+       AND NOT EXISTS (SELECT 1 FROM wallet_transfers wt WHERE wt.user_api_key = u.api_key)
+       AND NOT EXISTS (SELECT 1 FROM fiat_bank_transfers fbt WHERE fbt.user_api_key = u.api_key)`,
+    );
+
+    if (!users.length) return { sent: false, count: 0 };
+
+    const fromEmail = process.env.MAIL_FROM ?? 'noreply@sendcoins.ca';
+    const fromAddr = fromEmail.includes('<')
+      ? fromEmail.replace(/^[^<]*<([^>]+)>.*$/, '$1').trim()
+      : fromEmail;
+
+    const subject = 'Your Sendcoins wallet is ready — make your first move';
+    const buildHtml = (firstName: string | null) => `
+      <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px">
+        <h2 style="color:#1a1a2e">Hi ${firstName ?? 'there'} 👋</h2>
+        <p style="color:#444;line-height:1.6">
+          Your Sendcoins wallet is set up and ready to go — but you haven't made
+          a transaction yet. Here's what you can do right now:
+        </p>
+        <ul style="color:#444;line-height:2">
+          <li>💸 <strong>Send crypto</strong> to anyone, anywhere</li>
+          <li>🔄 <strong>Convert</strong> NGN to USDT instantly</li>
+          <li>🏦 <strong>Withdraw</strong> funds to your bank account</li>
+        </ul>
+        <a href="${process.env.ADMIN_FRONTEND_URL?.replace('admin.', '') ?? 'https://app.sendcoins.ca'}/dashboard"
+           style="display:inline-block;margin:16px 0;padding:12px 28px;background:#4f46e5;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
+          Get started →
+        </a>
+        <p style="color:#888;font-size:13px">
+          Questions? Reply to this email — we're happy to help.
+        </p>
+      </div>`;
+
+    let sentCount = 0;
+    for (const user of users) {
+      try {
+        await this.mailService.sendCustomEmail({
+          to: [user.user_email],
+          subject,
+          html: buildHtml(user.first_name),
+          fromName: 'Sendcoins',
+        });
+        sentCount++;
+      } catch (err) {
+        this.logger.warn(`Failed to send inactive outreach to ${user.user_email}: ${err}`);
+      }
+    }
+
+    const emails = users.map((u) => u.user_email);
+    await this.prisma.client.adminSentEmail.create({
+      data: {
+        fromEmail: fromAddr,
+        fromName: 'Sendcoins',
+        toEmails: emails,
+        ccEmails: [],
+        bccEmails: [],
+        subject,
+        bodyText: null,
+        bodyHtml: buildHtml(null),
+        status: sentCount > 0 ? 'sent' : 'failed',
+        sentAt: sentCount > 0 ? new Date() : null,
+        createdById: adminId,
+      },
+    });
+
+    return { sent: sentCount > 0, count: sentCount, total: users.length };
+  }
 }
