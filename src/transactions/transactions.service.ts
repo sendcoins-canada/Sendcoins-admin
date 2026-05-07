@@ -246,7 +246,22 @@ export class TransactionsService {
         : Promise.resolve(0),
     ]);
 
-    const total = historyCount + transferCount + fiatCount;
+    // Count new tables (raw SQL since no Prisma model)
+    let withdrawalCount = 0;
+    let buyCount = 0;
+    let cryptoFiatCount = 0;
+    try {
+      const [wdC, buyC, cfC] = await Promise.all([
+        this.prisma.client.$queryRawUnsafe<[{count: bigint}]>('SELECT COUNT(*) as count FROM withdrawals'),
+        this.prisma.client.$queryRawUnsafe<[{count: bigint}]>('SELECT COUNT(*) as count FROM fiat_crypto_conversions'),
+        this.prisma.client.$queryRawUnsafe<[{count: bigint}]>('SELECT COUNT(*) as count FROM crypto_fiat_conversions'),
+      ]);
+      withdrawalCount = Number(wdC[0]?.count || 0);
+      buyCount = Number(buyC[0]?.count || 0);
+      cryptoFiatCount = Number(cfC[0]?.count || 0);
+    } catch { /* tables may not exist yet */ }
+
+    const total = historyCount + transferCount + fiatCount + withdrawalCount + buyCount + cryptoFiatCount;
     const totalPages = Math.ceil(total / limit);
 
     // Fetch transactions with a reasonable buffer to account for unified sorting
@@ -287,11 +302,128 @@ export class TransactionsService {
           : Promise.resolve([]),
       ]);
 
+    // Fetch withdrawals (crypto-to-NGN)
+    let withdrawalTransactions: UnifiedTransactionResponseDto[] = [];
+    try {
+      const withdrawalRows = await this.prisma.client.$queryRawUnsafe<Array<{
+        id: string; reference: string; user_api_key: string;
+        source_asset: string; source_network: string; source_amount: string;
+        ngn_amount: string; platform_fee_crypto: string; strategy: string;
+        status: string; onchain_tx_hash: string | null; failure_reason: string | null;
+        created_at: Date; completed_at: Date | null;
+      }>>(
+        `SELECT id, reference, user_api_key, source_asset, source_network, source_amount,
+                ngn_amount, platform_fee_crypto, strategy, status, onchain_tx_hash,
+                failure_reason, created_at, completed_at
+         FROM withdrawals ORDER BY created_at DESC LIMIT $1`,
+        fetchLimit
+      );
+      withdrawalTransactions = withdrawalRows.map((wd) => ({
+        id: 0,
+        txId: wd.reference,
+        reference: wd.reference,
+        type: 'OUTGOING' as const,
+        transactionCategory: 'WITHDRAWAL',
+        dateInitiated: new Date(wd.created_at),
+        currency: { crypto: wd.source_asset, fiat: 'NGN', display: wd.source_asset },
+        amount: { crypto: Number(wd.source_amount), fiat: Number(wd.ngn_amount), display: `${wd.source_amount} ${wd.source_asset} → ${wd.ngn_amount} NGN` },
+        fee: Number(wd.platform_fee_crypto),
+        status: wd.status === 'completed' ? 'completed' : wd.status === 'ngn_credit_failed' ? 'failed' : wd.status,
+        isFlagged: false,
+        source: { address: wd.user_api_key, type: 'WALLET' },
+        destination: { address: 'NGN Wallet', type: 'WALLET', name: 'NGN Wallet', network: wd.source_network },
+        txHash: wd.onchain_tx_hash ?? undefined,
+        network: wd.source_network,
+        notes: `Strategy: ${wd.strategy || 'N/A'}`,
+        createdAt: new Date(wd.created_at),
+        updatedAt: wd.completed_at ? new Date(wd.completed_at) : undefined,
+      }));
+    } catch { /* table may not exist yet */ }
+
+    // Fetch fiat-to-crypto buys
+    let buyTransactions: UnifiedTransactionResponseDto[] = [];
+    try {
+      const buyRows = await this.prisma.client.$queryRawUnsafe<Array<{
+        conversion_id: number; reference: string; keychain: string;
+        user_api_key: string; user_email: string;
+        source_currency: string; source_amount: string;
+        destination_asset: string; destination_network: string; destination_amount: string;
+        platform_fee_fiat: string; platform_fee_usd: string; status: string;
+        created_at_timestamp: Date | null; completed_at: bigint | null;
+      }>>(
+        `SELECT conversion_id, reference, keychain, user_api_key, user_email,
+                source_currency, source_amount, destination_asset, destination_network,
+                destination_amount, platform_fee_fiat, platform_fee_usd, status, created_at_timestamp, completed_at
+         FROM fiat_crypto_conversions ORDER BY created_at DESC LIMIT $1`,
+        fetchLimit
+      );
+      buyTransactions = buyRows.map((buy) => ({
+        id: buy.conversion_id,
+        txId: buy.keychain,
+        reference: buy.reference,
+        type: 'INCOMING' as const,
+        transactionCategory: 'FIAT_CRYPTO_BUY',
+        dateInitiated: buy.created_at_timestamp ? new Date(buy.created_at_timestamp) : new Date(),
+        currency: { crypto: buy.destination_asset, fiat: buy.source_currency, display: buy.destination_asset },
+        amount: { crypto: Number(buy.destination_amount), fiat: Number(buy.source_amount), display: `${buy.destination_amount} ${buy.destination_asset}` },
+        fee: Number(buy.platform_fee_usd || 0),
+        status: buy.status || 'pending',
+        isFlagged: false,
+        source: { address: `${buy.source_currency} Wallet`, type: 'WALLET' as const, name: `${buy.source_amount} ${buy.source_currency}` },
+        destination: { address: buy.user_api_key || 'N/A', type: 'WALLET' as const, name: `${buy.destination_asset} Wallet`, network: buy.destination_network },
+        notes: `Bought with ${buy.source_amount} ${buy.source_currency} (fee: ${buy.platform_fee_fiat} ${buy.source_currency})`,
+        network: buy.destination_network,
+        createdAt: buy.created_at_timestamp ? new Date(buy.created_at_timestamp) : new Date(),
+        updatedAt: buy.completed_at ? new Date(Number(buy.completed_at) * 1000) : undefined,
+      }));
+    } catch { /* table may not exist yet */ }
+
+    // Fetch crypto-to-fiat conversions
+    let cryptoFiatTransactions: UnifiedTransactionResponseDto[] = [];
+    try {
+      const convRows = await this.prisma.client.$queryRawUnsafe<Array<{
+        conversion_id: number; reference: string; keychain: string;
+        user_api_key: string; user_email: string;
+        source_asset: string; source_network: string; source_amount: string;
+        destination_currency: string; destination_amount: string; final_fiat_amount: string;
+        platform_fee_amount: string; status: string;
+        created_at_timestamp: Date | null; completed_at: bigint | null;
+      }>>(
+        `SELECT conversion_id, reference, keychain, user_api_key, user_email,
+                source_asset, source_network, source_amount,
+                destination_currency, destination_amount, final_fiat_amount,
+                platform_fee_amount, status, created_at_timestamp, completed_at
+         FROM crypto_fiat_conversions ORDER BY created_at DESC LIMIT $1`,
+        fetchLimit
+      );
+      cryptoFiatTransactions = convRows.map((conv) => ({
+        id: conv.conversion_id,
+        txId: conv.keychain,
+        reference: conv.reference,
+        type: 'CONVERSION' as const,
+        transactionCategory: 'CRYPTO_FIAT_CONVERSION',
+        dateInitiated: conv.created_at_timestamp ? new Date(conv.created_at_timestamp) : new Date(),
+        currency: { crypto: conv.source_asset, fiat: conv.destination_currency, display: conv.source_asset },
+        amount: { crypto: Number(conv.source_amount), fiat: Number(conv.final_fiat_amount || conv.destination_amount), display: `${conv.source_amount} ${conv.source_asset} → ${conv.final_fiat_amount || conv.destination_amount} ${conv.destination_currency}` },
+        fee: Number(conv.platform_fee_amount || 0),
+        status: conv.status || 'pending',
+        isFlagged: false,
+        source: { address: conv.user_api_key, type: 'WALLET', name: conv.user_email },
+        destination: { address: `${conv.destination_currency} Wallet`, type: 'WALLET', name: `${conv.destination_currency} Wallet`, network: conv.source_network },
+        network: conv.source_network,
+        createdAt: conv.created_at_timestamp ? new Date(conv.created_at_timestamp) : new Date(),
+        updatedAt: conv.completed_at ? new Date(Number(conv.completed_at) * 1000) : undefined,
+      }));
+    } catch { /* table may not exist yet */ }
+
     // Transform and combine
     const unifiedTransactions = [
       ...historyTransactions.map((t) => this.transformHistoryTransaction(t)),
       ...transferTransactions.map((t) => this.transformTransferTransaction(t)),
       ...fiatTransactions.map((t) => this.transformFiatTransaction(t)),
+      ...withdrawalTransactions,
+      ...buyTransactions,
+      ...cryptoFiatTransactions,
     ];
 
     // Sort unified transactions
@@ -977,6 +1109,7 @@ export class TransactionsService {
             status_updated_by: admin.email,
             status_updated_at: BigInt(Date.now()),
             status_notes: dto.notes || 'Transaction approved',
+            ...(dto.txHash ? { tx_hash: dto.txHash } : {}),
           },
           include: { merchants: true },
         });
@@ -1050,6 +1183,7 @@ export class TransactionsService {
             status_updated_at: BigInt(Date.now()),
             status_notes: dto.notes || 'Transaction approved',
             updated_at: BigInt(Date.now()),
+            ...(dto.txHash ? { onchain_tx_hash: dto.txHash } : {}),
           },
         });
 
@@ -1070,6 +1204,83 @@ export class TransactionsService {
         );
 
         return this.transformFiatTransaction(updated);
+      }
+    }
+
+    throw new NotFoundException(`Transaction with ID ${id} not found`);
+  }
+
+  /**
+   * Update the transaction hash for any transaction (post-approval correction)
+   */
+  async updateTxHash(
+    id: number,
+    txHash: string,
+    adminId: number,
+    type?: 'transaction_history' | 'wallet_transfer' | 'fiat_transfer',
+  ): Promise<{ success: boolean; message: string; txHash: string }> {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id: adminId },
+    });
+    if (!admin) throw new BadRequestException('Admin user not found');
+
+    if (type === 'transaction_history' || !type) {
+      const tx = await this.prisma.client.transaction_history.findUnique({
+        where: { history_id: id },
+      });
+      if (tx) {
+        await this.prisma.client.transaction_history.update({
+          where: { history_id: id },
+          data: { tx_hash: txHash, updated_at: BigInt(Date.now()) },
+        });
+        await this.prisma.client.adminAuditLog.create({
+          data: {
+            action: 'TRANSACTION_HASH_UPDATED',
+            adminId,
+            detail: { transactionId: id, txHash, updatedBy: admin.email },
+          },
+        });
+        return { success: true, message: 'Transaction hash updated', txHash };
+      }
+    }
+
+    if (type === 'wallet_transfer' || !type) {
+      const tx = await this.prisma.client.wallet_transfers.findUnique({
+        where: { transfer_id: id },
+      });
+      if (tx) {
+        await this.prisma.client.wallet_transfers.update({
+          where: { transfer_id: id },
+          data: { tx_hash: txHash, updated_at: BigInt(Date.now()) },
+        });
+        await this.prisma.client.adminAuditLog.create({
+          data: {
+            action: 'TRANSACTION_HASH_UPDATED',
+            adminId,
+            detail: { transactionId: id, txHash, updatedBy: admin.email },
+          },
+        });
+        return { success: true, message: 'Transaction hash updated', txHash };
+      }
+    }
+
+    if (type === 'fiat_transfer' || !type) {
+      const tx = await this.prisma.client.fiat_bank_transfers.findUnique({
+        where: { id },
+      });
+      if (tx) {
+        await this.prisma.client.fiat_bank_transfers.update({
+          where: { id },
+          data: { onchain_tx_hash: txHash, updated_at: BigInt(Date.now()) },
+        });
+        await this.prisma.client.adminAuditLog.create({
+          data: {
+            action: 'TRANSACTION_HASH_UPDATED',
+            adminId,
+            detail: { transactionId: id, txHash, updatedBy: admin.email },
+          },
+        });
+        return { success: true, message: 'Transaction hash updated', txHash };
       }
     }
 
@@ -1603,6 +1814,7 @@ export class TransactionsService {
       status_updated_by?: string;
       status_updated_at?: bigint;
       status_notes?: string;
+      onchain_tx_hash?: string;
     };
 
     const createdAt = txRecord.created_at_timestamp
@@ -1651,6 +1863,7 @@ export class TransactionsService {
         ? new Date(Number(txRecord.status_updated_at))
         : undefined,
       statusNotes: txRecord.status_notes ?? undefined,
+      txHash: txRecord.onchain_tx_hash ?? undefined,
       createdAt,
       updatedAt: txRecord.updated_at
         ? new Date(Number(txRecord.updated_at))
@@ -1676,6 +1889,7 @@ export class TransactionsService {
       flagged_at?: bigint;
       flagged_by?: string;
       flagged_reason?: string;
+      tx_hash?: string;
     };
 
     const createdAt = txRecord.created_at_timestamp
@@ -1742,6 +1956,7 @@ export class TransactionsService {
         ? new Date(Number(txRecord.status_updated_at))
         : undefined,
       statusNotes: txRecord.status_notes,
+      txHash: txRecord.tx_hash ?? undefined,
       createdAt,
       updatedAt: txRecord.updated_at
         ? new Date(Number(txRecord.updated_at))

@@ -28,6 +28,7 @@ interface ConversionRow {
   is_flagged: boolean | null;
   flagged_reason: string | null;
   status_notes: string | null;
+  onchain_tx_hash: string | null;
 }
 
 @Injectable()
@@ -75,7 +76,8 @@ export class ConversionsService {
     const dataQuery = `
       SELECT id, reference, user_api_key, user_email, destination_country, currency, amount,
              full_name, bank_name, account_number, transit_number, notes, status,
-             created_at, created_at_timestamp, is_flagged, flagged_reason, status_notes
+             created_at, created_at_timestamp, is_flagged, flagged_reason, status_notes,
+             onchain_tx_hash
       FROM fiat_bank_transfers
       ${whereClause}
       ORDER BY created_at DESC
@@ -103,6 +105,7 @@ export class ConversionsService {
         isFlagged: c.is_flagged || false,
         flaggedReason: c.flagged_reason,
         statusNotes: c.status_notes,
+        txHash: c.onchain_tx_hash,
         createdAt: c.created_at_timestamp || new Date(Number(c.created_at)),
       })),
       pagination: {
@@ -119,7 +122,8 @@ export class ConversionsService {
       SELECT id, reference, user_api_key, user_email, destination_country, currency, amount,
              full_name, bank_name, account_number, transit_number, notes, status,
              created_at, created_at_timestamp, is_flagged, flagged_reason, flagged_at,
-             flagged_by, status_notes, status_updated_at, status_updated_by
+             flagged_by, status_notes, status_updated_at, status_updated_by,
+             onchain_tx_hash
       FROM fiat_bank_transfers
       WHERE id = $1
     `;
@@ -164,11 +168,12 @@ export class ConversionsService {
         ? new Date(Number(c.status_updated_at))
         : null,
       statusUpdatedBy: c.status_updated_by,
+      txHash: c.onchain_tx_hash,
       createdAt: c.created_at_timestamp || new Date(Number(c.created_at)),
     };
   }
 
-  async approve(id: number, adminId: number, notes?: string) {
+  async approve(id: number, adminId: number, notes?: string, txHash?: string) {
     // Check if conversion exists
     const conversion = await this.findOne(id);
 
@@ -192,7 +197,8 @@ export class ConversionsService {
           status_notes = $2,
           status_updated_at = $3,
           status_updated_by = $4,
-          updated_at = $3
+          updated_at = $3,
+          onchain_tx_hash = $5
       WHERE id = $1
     `;
 
@@ -202,6 +208,7 @@ export class ConversionsService {
       notes || 'Approved by admin',
       now,
       admin?.email || `admin_${adminId}`,
+      txHash || null,
     );
 
     // Log the action
@@ -215,6 +222,7 @@ export class ConversionsService {
           amount: conversion.amount,
           currency: conversion.currency,
           notes,
+          txHash: txHash || null,
         },
       },
     });
@@ -285,6 +293,44 @@ export class ConversionsService {
       id,
       status: 'failed',
       reason,
+    };
+  }
+
+  async updateHash(id: number, adminId: number, txHash: string) {
+    const conversion = await this.findOne(id);
+
+    const now = Date.now();
+
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id: adminId },
+      select: { email: true },
+    });
+
+    await this.prisma.client.$executeRawUnsafe(
+      `UPDATE fiat_bank_transfers SET onchain_tx_hash = $2, updated_at = $3 WHERE id = $1`,
+      id,
+      txHash,
+      now,
+    );
+
+    await this.prisma.client.adminAuditLog.create({
+      data: {
+        action: 'CONVERSION_HASH_UPDATED',
+        adminId,
+        detail: {
+          conversionId: id,
+          reference: conversion.reference,
+          txHash,
+          updatedBy: admin?.email || `admin_${adminId}`,
+        },
+      },
+    });
+
+    return {
+      success: true,
+      message: `Transaction hash updated for conversion ${conversion.reference}`,
+      id,
+      txHash,
     };
   }
 

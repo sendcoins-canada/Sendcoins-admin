@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Param,
   Body,
   Query,
@@ -26,6 +27,7 @@ import {
 import {
   ApproveConversionDto,
   RejectConversionDto,
+  UpdateConversionHashDto,
 } from './dto/conversion-action.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -125,7 +127,25 @@ export class ConversionsController {
     @Body() dto: ApproveConversionDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.conversionsService.approve(id, req.user.id, dto.notes);
+    return this.conversionsService.approve(id, req.user.id, dto.notes, dto.txHash);
+  }
+
+  @Patch(':id/hash')
+  @RequirePermission(Permission.VERIFY_TRANSACTIONS)
+  @ApiOperation({
+    summary: 'Update conversion transaction hash',
+    description: 'Updates the blockchain transaction hash for any conversion. Requires VERIFY_TRANSACTIONS permission.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Conversion ID' })
+  @ApiBody({ type: UpdateConversionHashDto })
+  @ApiResponse({ status: 200, description: 'Hash updated successfully' })
+  @ApiResponse({ status: 404, description: 'Conversion not found' })
+  updateHash(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateConversionHashDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.conversionsService.updateHash(id, req.user.id, dto.txHash);
   }
 
   @Post(':id/reject')

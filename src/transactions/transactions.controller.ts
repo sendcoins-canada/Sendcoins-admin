@@ -33,7 +33,7 @@ import { UpdateTransactionStatusDto } from './dto/update-transaction-status.dto'
 import { FlagTransactionDto } from './dto/flag-transaction.dto';
 import { BulkUpdateStatusDto, BulkFlagDto } from './dto/bulk-action.dto';
 import { VerifyTransactionDto } from './dto/verify-transaction.dto';
-import { ApproveTransactionDto } from './dto/approve-transaction.dto';
+import { ApproveTransactionDto, UpdateTransactionHashDto } from './dto/approve-transaction.dto';
 import { CancelTransactionDto } from './dto/cancel-transaction.dto';
 import {
   UnifiedTransactionResponseDto,
@@ -420,6 +420,23 @@ export class TransactionsController {
     @Req() req: AuthenticatedRequest,
   ): Promise<UnifiedTransactionResponseDto> {
     return this.transactionsService.approveTransaction(id, dto, req.user.id);
+  }
+
+  @Patch(':id/hash')
+  @RequirePermission(Permission.VERIFY_TRANSACTIONS)
+  @ApiOperation({
+    summary: 'Update transaction hash',
+    description: 'Updates or sets the blockchain transaction hash for any transaction. Requires VERIFY_TRANSACTIONS permission.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Transaction ID' })
+  @ApiResponse({ status: 200, description: 'Hash updated successfully' })
+  @ApiResponse({ status: 404, description: 'Transaction not found' })
+  async updateTxHash(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateTransactionHashDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.transactionsService.updateTxHash(id, dto.txHash, req.user.id, dto.type);
   }
 
   @Post(':id/cancel')

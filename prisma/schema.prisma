@@ -737,6 +737,7 @@ model transaction_history {
   status_updated_by         String?    @db.VarChar(255)
   status_updated_at         BigInt?
   status_notes              String?
+  tx_hash                   String?    @db.VarChar(255)
   payment_proof_url         String?
   payment_proof_uploaded_at BigInt?
   merchant_bank_name        String?    @db.VarChar(100)
@@ -876,6 +877,7 @@ model fiat_bank_transfers {
   status_updated_at    BigInt?
   status_updated_by    String?   @db.VarChar(255)
   updated_at           BigInt?
+  onchain_tx_hash      String?   @db.VarChar(255)
 
   @@index([reference], map: "idx_fiat_transfers_ref")
   @@index([status], map: "idx_fiat_transfers_status")

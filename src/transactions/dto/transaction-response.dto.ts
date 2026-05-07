@@ -58,9 +58,9 @@ export class UnifiedTransactionResponseDto {
   type!: 'INCOMING' | 'OUTGOING' | 'CONVERSION';
 
   @ApiProperty({
-    enum: ['BUY_SELL', 'WALLET_TRANSFER', 'FIAT_TRANSFER'],
+    enum: ['BUY_SELL', 'WALLET_TRANSFER', 'FIAT_TRANSFER', 'WITHDRAWAL', 'FIAT_CRYPTO_BUY', 'CRYPTO_FIAT_CONVERSION'],
   })
-  transactionCategory!: 'BUY_SELL' | 'WALLET_TRANSFER' | 'FIAT_TRANSFER';
+  transactionCategory!: 'BUY_SELL' | 'WALLET_TRANSFER' | 'FIAT_TRANSFER' | 'WITHDRAWAL' | 'FIAT_CRYPTO_BUY' | 'CRYPTO_FIAT_CONVERSION';
 
   @ApiProperty()
   dateInitiated!: Date;
