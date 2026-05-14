@@ -160,19 +160,29 @@ export class EmailsService {
     const subject = 'Complete your Sendcoins account verification';
     const buildHtml = (firstName: string | null) => `
       <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px">
+        <div style="margin-bottom:24px">
+          <img src="https://sendcoins.ca/images/logoblack.svg" alt="Sendcoins" style="height:40px" />
+        </div>
         <h2 style="color:#1a1a2e">Hi ${firstName ?? 'there'} 👋</h2>
         <p style="color:#444;line-height:1.6">
           You signed up for Sendcoins but haven't verified your account yet.
-          Verification takes less than 2 minutes and unlocks sending, converting,
-          and withdrawing crypto.
+          Verification takes less than 2 minutes and unlocks sending and converting
+          crypto.
         </p>
         <a href="${process.env.ADMIN_FRONTEND_URL?.replace('admin.', '') ?? 'https://app.sendcoins.ca'}/kyc"
-           style="display:inline-block;margin:16px 0;padding:12px 28px;background:#4f46e5;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
+           style="display:inline-block;margin:16px 0;padding:12px 28px;background:#0647F7;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
           Verify my account →
         </a>
         <p style="color:#888;font-size:13px">
           If you didn't create this account, you can safely ignore this email.
         </p>
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0" />
+        <div style="text-align:center">
+          <p style="color:#888;font-size:13px;margin-bottom:12px">Get the Sendcoins app</p>
+          <a href="https://play.google.com/store/apps/details?id=com.sendcoins.app">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" alt="Get it on Google Play" style="height:44px" />
+          </a>
+        </div>
       </div>`;
 
     let sentCount = 0;
@@ -232,6 +242,9 @@ export class EmailsService {
     const subject = 'Your Sendcoins wallet is ready — make your first move';
     const buildHtml = (firstName: string | null) => `
       <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px">
+        <div style="margin-bottom:24px">
+          <img src="https://sendcoins.ca/images/logoblack.svg" alt="Sendcoins" style="height:40px" />
+        </div>
         <h2 style="color:#1a1a2e">Hi ${firstName ?? 'there'} 👋</h2>
         <p style="color:#444;line-height:1.6">
           Your Sendcoins wallet is set up and ready to go — but you haven't made
@@ -239,16 +252,23 @@ export class EmailsService {
         </p>
         <ul style="color:#444;line-height:2">
           <li>💸 <strong>Send crypto</strong> to anyone, anywhere</li>
-          <li>🔄 <strong>Convert</strong> NGN to USDT instantly</li>
-          <li>🏦 <strong>Withdraw</strong> funds to your bank account</li>
+          <li>🔄 <strong>Convert</strong> Fiat to USDT</li>
+          <li>🏦 <strong>Withdraw</strong> cash to your local bank account directly</li>
         </ul>
         <a href="${process.env.ADMIN_FRONTEND_URL?.replace('admin.', '') ?? 'https://app.sendcoins.ca'}/dashboard"
-           style="display:inline-block;margin:16px 0;padding:12px 28px;background:#4f46e5;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
+           style="display:inline-block;margin:16px 0;padding:12px 28px;background:#0647F7;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
           Get started →
         </a>
         <p style="color:#888;font-size:13px">
           Questions? Reply to this email — we're happy to help.
         </p>
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0" />
+        <div style="text-align:center">
+          <p style="color:#888;font-size:13px;margin-bottom:12px">Get the Sendcoins app</p>
+          <a href="https://play.google.com/store/apps/details?id=com.sendcoins.app">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" alt="Get it on Google Play" style="height:44px" />
+          </a>
+        </div>
       </div>`;
 
     let sentCount = 0;
