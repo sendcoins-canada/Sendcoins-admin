@@ -72,38 +72,37 @@ async function bootstrap() {
     }),
   );
 
-  // Security headers with CSP configured for Swagger UI CDN assets
-  // Note: This CSP only applies to backend API responses, not frontend pages
-  app.use(
-    helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          styleSrc: [
-            "'self'",
-            "'unsafe-inline'", // Swagger UI and Monaco Editor may need inline styles
-            'https://cdnjs.cloudflare.com',
-            'https://cdn.jsdelivr.net', // Monaco Editor CDN
-            'https://fonts.googleapis.com', // Google Fonts
-          ],
-          scriptSrc: [
-            "'self'",
-            "'unsafe-inline'", // Swagger UI initialization script
-            "'unsafe-eval'", // Monaco Editor may need eval
-            'https://cdnjs.cloudflare.com',
-            'https://cdn.jsdelivr.net', // Monaco Editor CDN
-          ],
-          workerSrc: [
-            "'self'",
-            'blob:', // Monaco Editor web workers
-          ],
-          imgSrc: ["'self'", 'data:', 'https:'],
-          connectSrc: ["'self'"],
-          fontSrc: ["'self'", 'https:', 'data:', 'https://fonts.gstatic.com'],
-        },
-      },
-    }),
-  );
+  // // Security headers — temporarily disabled to debug CORS issues
+  // app.use(
+  //   helmet({
+  //     contentSecurityPolicy: {
+  //       directives: {
+  //         defaultSrc: ["'self'"],
+  //         styleSrc: [
+  //           "'self'",
+  //           "'unsafe-inline'",
+  //           'https://cdnjs.cloudflare.com',
+  //           'https://cdn.jsdelivr.net',
+  //           'https://fonts.googleapis.com',
+  //         ],
+  //         scriptSrc: [
+  //           "'self'",
+  //           "'unsafe-inline'",
+  //           "'unsafe-eval'",
+  //           'https://cdnjs.cloudflare.com',
+  //           'https://cdn.jsdelivr.net',
+  //         ],
+  //         workerSrc: [
+  //           "'self'",
+  //           'blob:',
+  //         ],
+  //         imgSrc: ["'self'", 'data:', 'https:'],
+  //         connectSrc: ["'self'"],
+  //         fontSrc: ["'self'", 'https:', 'data:', 'https://fonts.gstatic.com'],
+  //       },
+  //     },
+  //   }),
+  // );
 
   // CORS - Allow all origins
   app.enableCors();
