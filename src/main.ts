@@ -13,8 +13,6 @@ import basicAuth from 'express-basic-auth';
 
 dotenv.config();
 
-let server: any;
-
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
 
@@ -178,18 +176,9 @@ async function bootstrap() {
 
   SwaggerModule.setup('api/docs', app, document, swaggerOptions);
 
-  await app.init();
-  server = app.getHttpAdapter().getInstance();
-
-  if (!process.env.VERCEL) {
-    const port = process.env.PORT || 4005;
-    await app.listen(port);
-    console.log(`Application is running on: http://localhost:${port}`);
-    console.log(`Swagger docs available at: http://localhost:${port}/api/docs`);
-  }
-
-  return server;
+  const port = process.env.PORT || 4005;
+  await app.listen(port);
+  console.log(`Application is running on: http://localhost:${port}`);
+  console.log(`Swagger docs available at: http://localhost:${port}/api/docs`);
 }
-
-// Vercel serverless handler
-export default bootstrap();
+void bootstrap();
