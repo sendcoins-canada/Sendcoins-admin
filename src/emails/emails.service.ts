@@ -255,7 +255,7 @@ export class EmailsService {
           <li>🔄 <strong>Convert</strong> Fiat to USDT</li>
           <li>🏦 <strong>Withdraw</strong> cash to your local bank account directly</li>
         </ul>
-        <a href="${process.env.ADMIN_FRONTEND_URL?.replace('admin.', '') ?? 'https://app.sendcoins.ca'}/dashboard"
+        <a href="https://app.sendcoins.ca/login"
            style="display:inline-block;margin:16px 0;padding:12px 28px;background:#0647F7;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
           Get started →
         </a>
