@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { SendEmailDto } from './dto/send-email.dto';
+import { SendNewsletterDto } from './dto/send-newsletter.dto';
+import { NewsletterTemplateService } from './newsletter-template.service';
 
 @Injectable()
 export class EmailsService {
@@ -10,6 +12,7 @@ export class EmailsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
+    private readonly newsletterTemplate: NewsletterTemplateService,
   ) {}
 
   async sendAndSave(dto: SendEmailDto, adminId: number): Promise<{ id: number; sent: boolean }> {
@@ -118,7 +121,7 @@ export class EmailsService {
   // ---------------------------------------------------------------------------
 
   async getCampaignStats() {
-    const [unverified, inactive] = await Promise.all([
+    const [unverified, inactive, all, verified] = await Promise.all([
       this.prisma.client.$queryRawUnsafe<[{ count: bigint }]>(
         `SELECT COUNT(*) as count FROM send_coin_user
          WHERE (verify_user IS NULL OR verify_user = false)
@@ -133,10 +136,23 @@ export class EmailsService {
          AND NOT EXISTS (SELECT 1 FROM wallet_transfers wt WHERE wt.user_api_key = u.api_key)
          AND NOT EXISTS (SELECT 1 FROM fiat_bank_transfers fbt WHERE fbt.user_api_key = u.api_key)`,
       ),
+      this.prisma.client.$queryRawUnsafe<[{ count: bigint }]>(
+        `SELECT COUNT(*) as count FROM send_coin_user
+         WHERE account_ban = 'false'
+         AND user_email IS NOT NULL`,
+      ),
+      this.prisma.client.$queryRawUnsafe<[{ count: bigint }]>(
+        `SELECT COUNT(*) as count FROM send_coin_user
+         WHERE verify_user = true
+         AND account_ban = 'false'
+         AND user_email IS NOT NULL`,
+      ),
     ]);
     return {
       unverified: Number(unverified[0]?.count ?? 0),
       inactive: Number(inactive[0]?.count ?? 0),
+      all: Number(all[0]?.count ?? 0),
+      verified: Number(verified[0]?.count ?? 0),
     };
   }
 
@@ -304,5 +320,132 @@ export class EmailsService {
     });
 
     return { sent: sentCount > 0, count: sentCount, total: users.length };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Newsletter
+  // ---------------------------------------------------------------------------
+
+  async previewNewsletter(dto: SendNewsletterDto): Promise<{ html: string }> {
+    const previewBody = this.newsletterTemplate.replaceMergeFields(dto.body, {
+      first_name: 'John',
+      last_name: 'Doe',
+      user_email: 'john@example.com',
+      phone: '+1234567890',
+    });
+
+    const html = this.newsletterTemplate.renderNewsletter({
+      logoSize: dto.logoSize,
+      logoVariant: dto.logoVariant,
+      heroImageUrl: dto.heroImageUrl,
+      heroImageHeight: dto.heroImageHeight,
+      heroImageBorder: dto.heroImageBorder,
+      body: previewBody,
+      fontFamily: dto.fontFamily,
+      ctaText: dto.ctaText,
+      ctaUrl: dto.ctaUrl,
+    });
+    return { html };
+  }
+
+  async sendNewsletter(
+    dto: SendNewsletterDto,
+    adminId: number,
+  ): Promise<{ sent: boolean; count: number; total: number }> {
+    const users = await this.getUsersBySegment(dto.segment, dto.customEmails);
+    if (!users.length) return { sent: false, count: 0, total: 0 };
+
+    const fromEmail = process.env.MAIL_FROM ?? 'noreply@sendcoins.ca';
+    const fromAddr = fromEmail.includes('<')
+      ? fromEmail.replace(/^[^<]*<([^>]+)>.*$/, '$1').trim()
+      : fromEmail;
+
+    let sentCount = 0;
+    for (const user of users) {
+      try {
+        const personalBody = this.newsletterTemplate.replaceMergeFields(dto.body, user);
+        const html = this.newsletterTemplate.renderNewsletter({
+          heroImageUrl: dto.heroImageUrl,
+          heroImageHeight: dto.heroImageHeight,
+          heroImageBorder: dto.heroImageBorder,
+          body: personalBody,
+          fontFamily: dto.fontFamily,
+          ctaText: dto.ctaText,
+          ctaUrl: dto.ctaUrl,
+        });
+
+        await this.mailService.sendCustomEmail({
+          to: [user.user_email],
+          subject: dto.subject,
+          html,
+          fromName: 'Sendcoins',
+        });
+        sentCount++;
+      } catch (err) {
+        this.logger.warn(`Failed to send newsletter to ${user.user_email}: ${err}`);
+      }
+    }
+
+    // Persist a record with the generic (non-personalized) version
+    const genericHtml = this.newsletterTemplate.renderNewsletter({
+      logoSize: dto.logoSize,
+      logoVariant: dto.logoVariant,
+      heroImageUrl: dto.heroImageUrl,
+      heroImageHeight: dto.heroImageHeight,
+      heroImageBorder: dto.heroImageBorder,
+      body: dto.body,
+      fontFamily: dto.fontFamily,
+      ctaText: dto.ctaText,
+      ctaUrl: dto.ctaUrl,
+    });
+
+    const emails = users.map((u) => u.user_email);
+    await this.prisma.client.adminSentEmail.create({
+      data: {
+        fromEmail: fromAddr,
+        fromName: 'Sendcoins',
+        toEmails: emails,
+        ccEmails: [],
+        bccEmails: [],
+        subject: dto.subject,
+        bodyText: null,
+        bodyHtml: genericHtml,
+        status: sentCount > 0 ? 'sent' : 'failed',
+        sentAt: sentCount > 0 ? new Date() : null,
+        createdById: adminId,
+      },
+    });
+
+    return { sent: sentCount > 0, count: sentCount, total: users.length };
+  }
+
+  private async getUsersBySegment(
+    segment: 'all' | 'unverified' | 'inactive' | 'verified' | 'custom',
+    customEmails?: string[],
+  ): Promise<Array<{ user_email: string; first_name: string | null; last_name: string | null; phone: string | null }>> {
+    if (segment === 'custom') {
+      return (customEmails ?? []).map((email) => ({
+        user_email: email,
+        first_name: null,
+        last_name: null,
+        phone: null,
+      }));
+    }
+
+    const whereClause: Record<string, string> = {
+      all: `WHERE account_ban = 'false' AND user_email IS NOT NULL`,
+      verified: `WHERE verify_user = true AND account_ban = 'false' AND user_email IS NOT NULL`,
+      unverified: `WHERE (verify_user IS NULL OR verify_user = false) AND account_ban = 'false' AND user_email IS NOT NULL`,
+      inactive: `WHERE account_ban = 'false' AND user_email IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM transaction_history th WHERE th.user_api_key = u.api_key)
+        AND NOT EXISTS (SELECT 1 FROM wallet_transfers wt WHERE wt.user_api_key = u.api_key)
+        AND NOT EXISTS (SELECT 1 FROM fiat_bank_transfers fbt WHERE fbt.user_api_key = u.api_key)`,
+    };
+
+    return this.prisma.client.$queryRawUnsafe<
+      Array<{ user_email: string; first_name: string | null; last_name: string | null; phone: string | null }>
+    >(
+      `SELECT u.user_email, u.first_name, u.last_name, u.phone FROM send_coin_user u ${whereClause[segment]}`,
+    );
   }
 }

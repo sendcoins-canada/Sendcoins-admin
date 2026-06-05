@@ -7,6 +7,7 @@ import { RequirePermission } from '../auth/require-permission.decorator';
 import { Permission } from '../auth/permissions.enum';
 import { EmailsService } from './emails.service';
 import { SendEmailDto } from './dto/send-email.dto';
+import { SendNewsletterDto } from './dto/send-newsletter.dto';
 
 @Controller('emails')
 @UseGuards(JwtAuthGuard, PermissionsGuard, MfaActionGuard)
@@ -64,6 +65,21 @@ export class EmailsController {
   @RequirePermission(Permission.SEND_EMAILS)
   async sendInactiveOutreach(@Request() req: { user: { id: number } }) {
     return this.emailsService.sendInactiveOutreach(req.user.id);
+  }
+
+  @Post('newsletter/preview')
+  @RequirePermission(Permission.SEND_EMAILS)
+  async newsletterPreview(@Body() dto: SendNewsletterDto) {
+    return this.emailsService.previewNewsletter(dto);
+  }
+
+  @Post('newsletter/send')
+  @RequirePermission(Permission.SEND_EMAILS)
+  async newsletterSend(
+    @Body() dto: SendNewsletterDto,
+    @Request() req: { user: { id: number } },
+  ) {
+    return this.emailsService.sendNewsletter(dto, req.user.id);
   }
 
   @Get(':id')
