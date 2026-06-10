@@ -6,6 +6,7 @@ import { AuthGuard } from '@nestjs/passport';
 const PUBLIC_PATHS: { method: string; pathPrefix: string }[] = [
   { method: 'GET', pathPrefix: '/health' },
   { method: 'GET', pathPrefix: '/permissions' }, // Public - just lists available permissions
+  { method: 'GET', pathPrefix: '/uploads/image' }, // Public - image URLs are used in emails and dashboard
   { method: 'POST', pathPrefix: '/auth/admin/login' },
   { method: 'POST', pathPrefix: '/auth/admin/verify-mfa' },
   { method: 'POST', pathPrefix: '/auth/admin/refresh' }, // Uses refresh token, not JWT
