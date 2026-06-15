@@ -286,36 +286,69 @@ export class PlatformService {
 
   /**
    * Get all platform wallets (fee wallet, hot wallet)
+   * Returns all currencies from platform_accounts (NGN, USD, etc.)
    */
   async getPlatformWallets() {
-    const feeWallet = await this.getBalance('NGN');
+    try {
+      const allAccounts = await this.prisma.client.$queryRaw<
+        Array<{
+          currency: string;
+          current_balance: number;
+          total_fees_collected: number;
+        }>
+      >`
+        SELECT currency,
+               SUM(current_balance) as current_balance,
+               SUM(total_fees_collected) as total_fees_collected
+        FROM platform_accounts
+        WHERE status = 'active'
+        GROUP BY currency
+        ORDER BY currency
+      `;
 
-    // For now, return the fee wallet as both fee and hot wallet
-    // In a real implementation, you'd have separate wallets
-    return {
-      feeWallet: feeWallet
-        ? {
-            address: feeWallet.accountName || 'Platform Fee Wallet',
-            balances: [
-              {
-                currency: feeWallet.currency,
-                amount: feeWallet.currentBalance,
-                amountUsd: feeWallet.currentBalance, // Assuming NGN for now
-              },
-            ],
-            totalUsd: feeWallet.totalFeesCollected,
-          }
-        : {
-            address: 'Not configured',
-            balances: [],
-            totalUsd: '0',
-          },
-      hotWallet: {
-        address: 'Hot Wallet',
-        balances: [],
-        totalUsd: '0',
-      },
-    };
+      const balances = allAccounts.map((account) => ({
+        currency: account.currency,
+        amount: String(account.current_balance || 0),
+        amountUsd: String(account.total_fees_collected || 0),
+      }));
+
+      const totalFees = allAccounts.reduce(
+        (sum, a) => sum + parseFloat(String(a.total_fees_collected || 0)),
+        0,
+      );
+
+      // Use NGN balance as the headline figure if available
+      const ngnAccount = allAccounts.find((a) => a.currency === 'NGN');
+      const headlineBalance = ngnAccount
+        ? String(ngnAccount.current_balance || 0)
+        : String(totalFees);
+
+      return {
+        feeWallet: {
+          address: 'Platform Fee Wallet',
+          balances,
+          totalUsd: headlineBalance,
+        },
+        hotWallet: {
+          address: 'Hot Wallet',
+          balances: [],
+          totalUsd: '0',
+        },
+      };
+    } catch {
+      return {
+        feeWallet: {
+          address: 'Not configured',
+          balances: [],
+          totalUsd: '0',
+        },
+        hotWallet: {
+          address: 'Hot Wallet',
+          balances: [],
+          totalUsd: '0',
+        },
+      };
+    }
   }
 
   /**
