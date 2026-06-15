@@ -323,6 +323,9 @@ export class PlatformService {
         ? String(ngnAccount.current_balance || 0)
         : String(totalFees);
 
+      // Get total fiat balance across all users from wallet_accounts
+      const totalUserFiat = await this.getTotalUserFiatBalance();
+
       return {
         feeWallet: {
           address: 'Platform Fee Wallet',
@@ -334,6 +337,7 @@ export class PlatformService {
           balances: [],
           totalUsd: '0',
         },
+        totalUserFiat,
       };
     } catch {
       return {
@@ -347,6 +351,67 @@ export class PlatformService {
           balances: [],
           totalUsd: '0',
         },
+        totalUserFiat: {
+          totalBalance: '0',
+          totalUsers: 0,
+          balances: [],
+        },
+      };
+    }
+  }
+
+  /**
+   * Get total fiat balance across all users from wallet_accounts
+   */
+  async getTotalUserFiatBalance() {
+    try {
+      const result = await this.prisma.client.$queryRaw<
+        Array<{
+          currency: string;
+          total_available: number;
+          total_actual: number;
+          user_count: bigint;
+        }>
+      >`
+        SELECT
+          wa.currency,
+          COALESCE(SUM(wa.available_balance), 0) as total_available,
+          COALESCE(SUM(wa.actual_balance), 0) as total_actual,
+          COUNT(DISTINCT w.user_api_key) as user_count
+        FROM wallet_accounts wa
+        JOIN wallets w ON wa.wallet_id = w.id
+        WHERE w.status = 'active'
+        GROUP BY wa.currency
+        ORDER BY wa.currency
+      `;
+
+      const balances = result.map((row) => ({
+        currency: row.currency,
+        availableBalance: String(row.total_available || 0),
+        actualBalance: String(row.total_actual || 0),
+        userCount: Number(row.user_count),
+      }));
+
+      const totalBalance = result.reduce(
+        (sum, row) => sum + parseFloat(String(row.total_available || 0)),
+        0,
+      );
+
+      const totalUsers = result.reduce(
+        (sum, row) => sum + Number(row.user_count),
+        0,
+      );
+
+      return {
+        totalBalance: String(totalBalance),
+        totalUsers,
+        balances,
+      };
+    } catch {
+      return {
+        totalBalance: '0',
+        totalUsers: 0,
+        balances: [],
       };
     }
   }
