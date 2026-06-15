@@ -1472,6 +1472,78 @@ export class TransactionsService {
   }
 
   /**
+   * Retry a pending_funding wallet transfer — admin funded the master wallet,
+   * now re-attempt the send through the simulator.
+   */
+  async retryPendingFundingTransfer(id: number, adminId: number) {
+    const admin = await this.prisma.client.adminUser.findUnique({
+      where: { id: adminId },
+    });
+    if (!admin) {
+      throw new BadRequestException('Admin user not found');
+    }
+
+    const transaction = await this.prisma.client.wallet_transfers.findUnique({
+      where: { transfer_id: id },
+    });
+    if (!transaction) {
+      throw new NotFoundException(`Wallet transfer with ID ${id} not found`);
+    }
+    if (transaction.status !== 'pending_funding') {
+      throw new BadRequestException(
+        `Cannot retry transfer with status "${transaction.status}". Only pending_funding transfers can be retried.`,
+      );
+    }
+
+    const simulatorUrl =
+      process.env.TX_SIMULATOR_URL || 'http://localhost:4100';
+    const simulatorSecret = process.env.TX_SIMULATOR_SECRET;
+
+    const axios = require('axios');
+    const response = await axios.post(
+      `${simulatorUrl}/api/transfer/retry`,
+      { reference: transaction.reference },
+      {
+        timeout: 120000,
+        headers: simulatorSecret
+          ? { 'x-api-secret': simulatorSecret }
+          : {},
+        validateStatus: () => true,
+      },
+    );
+
+    const result = response.data;
+
+    // Notify admins about the retry
+    await this.notifications.notifyAdminsByPermission(
+      Permission.VERIFY_TRANSACTIONS,
+      AdminNotificationType.TRANSACTION_APPROVED,
+      'Transfer Retry Attempted',
+      `Wallet transfer ${transaction.reference} retry by ${admin.email}. Result: ${result.success ? 'success' : result.error || 'failed'}`,
+      {
+        metadata: {
+          transactionId: id,
+          transactionReference: transaction.reference,
+          retriedBy: admin.email,
+          result: { success: result.success, txid: result.txid, code: result.code },
+        },
+        sendEmail: false,
+      },
+    );
+
+    return {
+      success: result.success,
+      message: result.success
+        ? 'Transfer retry successful'
+        : `Retry failed: ${result.error || result.message || 'Unknown error'}`,
+      txid: result.txid,
+      reference: result.reference || transaction.reference,
+      originalReference: transaction.reference,
+      status: result.status,
+    };
+  }
+
+  /**
    * Get user details for a transaction
    */
   async getTransactionUser(

@@ -463,6 +463,23 @@ export class TransactionsController {
     return this.transactionsService.cancelTransaction(id, dto, req.user.id);
   }
 
+  @Post(':id/retry')
+  @RequirePermission(Permission.VERIFY_TRANSACTIONS)
+  @RequireMfa()
+  @ApiOperation({
+    summary: 'Retry a pending_funding transfer',
+    description: 'Re-attempts a send that failed due to insufficient master wallet balance. Requires MFA.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Transaction ID (wallet_transfers.transfer_id)' })
+  @ApiResponse({ status: 200, description: 'Retry result from simulator' })
+  @ApiResponse({ status: 404, description: 'Transaction not found' })
+  async retryTransaction(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.transactionsService.retryPendingFundingTransfer(id, req.user.id);
+  }
+
   @Get(':id/user')
   @RequirePermission(Permission.READ_TRANSACTIONS)
   @ApiOperation({
