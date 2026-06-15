@@ -23,6 +23,8 @@ export enum TransactionType {
 
 export enum TransactionStatus {
   PENDING = 'pending',
+  PENDING_FUNDING = 'pending_funding',
+  PENDING_CONFIRMATION = 'pending_confirmation',
   PROCESSING = 'processing',
   COMPLETED = 'completed',
   FAILED = 'failed',

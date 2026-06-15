@@ -40,7 +40,7 @@ type FiatTransferRecord = Prisma.fiat_bank_transfersGetPayload<object>;
 
 // Filter types for better type safety
 interface TransactionFilter {
-  status?: string;
+  status?: string | { in: string[] };
   created_at?: { gte?: bigint; lte?: bigint };
   OR?: Array<Record<string, unknown>>;
   asset_type?: string;
@@ -470,6 +470,19 @@ export class TransactionsService {
         totalPages,
       },
     };
+  }
+
+  /**
+   * Get transactions pending admin approval (pending + pending_funding).
+   */
+  async findAllPendingApprovals(
+    dto: Omit<GetTransactionsDto, 'status'>,
+  ): Promise<PaginatedTransactionsResponseDto> {
+    return this.findAll({
+      ...dto,
+      // Override status filter — buildTransferFilters will use { in: [...] }
+      status: '__pending_approvals__' as any,
+    });
   }
 
   /**
@@ -1140,10 +1153,31 @@ export class TransactionsService {
       });
 
       if (transaction) {
+        // If this was a pending_funding transfer, call the simulator to deduct locked balance
+        if (transaction.status === 'pending_funding') {
+          const simulatorUrl = process.env.TX_SIMULATOR_URL || 'http://localhost:4100';
+          const simulatorSecret = process.env.TX_SIMULATOR_SECRET;
+          try {
+            const axios = require('axios');
+            await axios.post(`${simulatorUrl}/api/transfer/resolve`, {
+              reference: transaction.reference,
+              txHash: dto.txHash || '',
+            }, {
+              timeout: 15000,
+              headers: simulatorSecret ? { 'x-api-secret': simulatorSecret } : {},
+              validateStatus: () => true,
+            });
+          } catch (err) {
+            // Log but don't block approval — admin can fix manually
+            console.error(`[APPROVE] Failed to resolve simulator transfer ${transaction.reference}: ${(err as Error).message}`);
+          }
+        }
+
         const updated = await this.prisma.client.wallet_transfers.update({
           where: { transfer_id: id },
           data: {
             status: 'completed',
+            tx_hash: dto.txHash || transaction.tx_hash,
             updated_at: BigInt(Date.now()),
           },
         });
@@ -1348,6 +1382,24 @@ export class TransactionsService {
       });
 
       if (transaction) {
+        // If this was a pending_funding transfer, call the simulator to unlock the locked balance
+        if (transaction.status === 'pending_funding') {
+          const simulatorUrl = process.env.TX_SIMULATOR_URL || 'http://localhost:4100';
+          const simulatorSecret = process.env.TX_SIMULATOR_SECRET;
+          try {
+            const axios = require('axios');
+            await axios.post(`${simulatorUrl}/api/transfer/cancel`, {
+              reference: transaction.reference,
+            }, {
+              timeout: 15000,
+              headers: simulatorSecret ? { 'x-api-secret': simulatorSecret } : {},
+              validateStatus: () => true,
+            });
+          } catch (err) {
+            console.error(`[CANCEL] Failed to cancel simulator transfer ${transaction.reference}: ${(err as Error).message}`);
+          }
+        }
+
         const updated = await this.prisma.client.wallet_transfers.update({
           where: { transfer_id: id },
           data: {
@@ -1650,7 +1702,11 @@ export class TransactionsService {
     const filter: TransactionFilter = {};
 
     if (dto.status) {
-      filter.status = dto.status;
+      if ((dto.status as string) === '__pending_approvals__') {
+        filter.status = { in: ['pending', 'pending_funding'] };
+      } else {
+        filter.status = dto.status;
+      }
     }
 
     if (dto.flagged !== undefined) {
@@ -1697,7 +1753,11 @@ export class TransactionsService {
     const filter: TransactionFilter = {};
 
     if (dto.status) {
-      filter.status = dto.status;
+      if ((dto.status as string) === '__pending_approvals__') {
+        filter.status = { in: ['pending', 'pending_funding'] };
+      } else {
+        filter.status = dto.status;
+      }
     }
 
     if (dto.flagged !== undefined) {
@@ -1734,7 +1794,11 @@ export class TransactionsService {
     const filter: TransactionFilter = {};
 
     if (dto.status) {
-      filter.status = dto.status;
+      if ((dto.status as string) === '__pending_approvals__') {
+        filter.status = { in: ['pending', 'pending_funding'] };
+      } else {
+        filter.status = dto.status;
+      }
     }
 
     if (dto.flagged !== undefined) {

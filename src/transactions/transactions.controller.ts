@@ -131,10 +131,9 @@ export class TransactionsController {
   ): Promise<PaginatedTransactionsResponseDto> {
     const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit ?? '20', 10) || 20));
-    return this.transactionsService.findAll({
+    return this.transactionsService.findAllPendingApprovals({
       page: pageNum,
       limit: limitNum,
-      status: TransactionStatus.PENDING,
       sortBy: SortBy.CREATED_AT,
       sortOrder: SortOrder.DESC,
     });
