@@ -16,7 +16,5 @@ CREATE INDEX IF NOT EXISTS "idx_system_settings_key" ON "system_settings"("setti
 INSERT INTO "system_settings" ("setting_key", "setting_value", "setting_type", "description", "updated_by")
 VALUES
     ('conversion_auto_approve_threshold_usd', '500', 'number', 'USD threshold for automatic conversion approval. Conversions below this amount are auto-approved.', 'system'),
-    ('platform_fee_percentage', '1.2', 'number', 'Platform fee percentage for crypto-to-fiat conversions (e.g. 1.2 = 1.2%).', 'system'),
-    ('btc_fee_markup_percent', '15', 'number', 'Markup percentage added to last BTC mining fee for platform fee calculation. E.g. 15 = charge 15% above the last mining fee.', 'system'),
-    ('btc_min_send_usd', '10', 'number', 'Minimum BTC send amount in USD. Converted to BTC using live market price at send time.', 'system')
+    ('platform_fee_percentage', '1.2', 'number', 'Platform fee percentage for crypto-to-fiat conversions (e.g. 1.2 = 1.2%).', 'system')
 ON CONFLICT ("setting_key") DO NOTHING;
