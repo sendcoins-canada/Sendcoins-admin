@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { GetKycQueryDto, KycStatus } from './dto/get-kyc-query.dto';
 
 interface UserRow {
@@ -26,7 +27,12 @@ interface VerificationRow {
 
 @Injectable()
 export class KycService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(KycService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
 
   async findAll(query: GetKycQueryDto) {
     const {
@@ -170,11 +176,12 @@ export class KycService {
 
   async approveKyc(userId: number, adminId: number, notes?: string) {
     // Check if user exists
-    const checkQuery = `SELECT azer_id, user_email, verify_user FROM send_coin_user WHERE azer_id = $1`;
+    const checkQuery = `SELECT azer_id, user_email, first_name, verify_user FROM send_coin_user WHERE azer_id = $1`;
     const users = await this.prisma.client.$queryRawUnsafe<
       Array<{
         azer_id: number;
         user_email: string | null;
+        first_name: string | null;
         verify_user: boolean | null;
       }>
     >(checkQuery, userId);
@@ -200,6 +207,32 @@ export class KycService {
       },
     });
 
+    // Send approval email
+    if (users[0].user_email) {
+      try {
+        await this.mailService.sendCustomEmail({
+          to: [users[0].user_email],
+          subject: 'Your Sendcoins identity verification has been approved',
+          html: `
+            <div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto;">
+              <h2 style="color: #166534;">Identity Verified ✓</h2>
+              <p>Hi ${users[0].first_name || 'there'},</p>
+              <p>Great news! Your identity verification has been <strong>approved</strong>. You now have full access to all Sendcoins features.</p>
+              <p>You can now:</p>
+              <ul>
+                <li>Send and receive crypto</li>
+                <li>Access higher transaction limits</li>
+              </ul>
+              <p>Thank you for verifying your identity.</p>
+              <p>— The Sendcoins Team</p>
+            </div>
+          `,
+        });
+      } catch (err: any) {
+        this.logger.error(`Failed to send KYC approval email to ${users[0].user_email}: ${err.message}`);
+      }
+    }
+
     return {
       success: true,
       message: `KYC approved for user ${userId}`,
@@ -215,11 +248,12 @@ export class KycService {
     notes?: string,
   ) {
     // Check if user exists
-    const checkQuery = `SELECT azer_id, user_email, verify_user FROM send_coin_user WHERE azer_id = $1`;
+    const checkQuery = `SELECT azer_id, user_email, first_name, verify_user FROM send_coin_user WHERE azer_id = $1`;
     const users = await this.prisma.client.$queryRawUnsafe<
       Array<{
         azer_id: number;
         user_email: string | null;
+        first_name: string | null;
         verify_user: boolean | null;
       }>
     >(checkQuery, userId);
@@ -245,6 +279,34 @@ export class KycService {
         },
       },
     });
+
+    // Send rejection email
+    if (users[0].user_email) {
+      try {
+        await this.mailService.sendCustomEmail({
+          to: [users[0].user_email],
+          subject: 'Your Sendcoins identity verification needs attention',
+          html: `
+            <div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto;">
+              <h2 style="color: #991b1b;">Verification Not Approved</h2>
+              <p>Hi ${users[0].first_name || 'there'},</p>
+              <p>Unfortunately, we were unable to approve your identity verification.</p>
+              <p><strong>Reason:</strong> ${reason}</p>
+              <p>Please re-submit your verification with a valid government-issued ID and a clear selfie. Make sure:</p>
+              <ul>
+                <li>Your document is not expired</li>
+                <li>All details are clearly visible</li>
+                <li>Your selfie matches the photo on your ID</li>
+              </ul>
+              <p>If you believe this was a mistake, please contact our support team.</p>
+              <p>— The Sendcoins Team</p>
+            </div>
+          `,
+        });
+      } catch (err: any) {
+        this.logger.error(`Failed to send KYC rejection email to ${users[0].user_email}: ${err.message}`);
+      }
+    }
 
     return {
       success: true,
