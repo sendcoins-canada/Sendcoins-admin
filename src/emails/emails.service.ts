@@ -185,7 +185,7 @@ export class EmailsService {
           Verification takes less than 2 minutes and unlocks sending and converting
           crypto.
         </p>
-        <a href="https://app.sendcoins.ca/login"
+        <a href="https://app.sendcoins.ca/login?redirect=/kyc"
            style="display:inline-block;margin:16px 0;padding:12px 28px;background:#0647F7;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
           Verify my account →
         </a>
