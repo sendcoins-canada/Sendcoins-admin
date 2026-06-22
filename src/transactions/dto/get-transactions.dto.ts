@@ -8,8 +8,17 @@ import {
   Max,
   IsDateString,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+
+/**
+ * Lowercases incoming enum values so the API tolerates both the UPPERCASE
+ * values it emits in responses (e.g. "COMPLETED", "INCOMING") and the
+ * lowercase values its enums are defined with. Without this, the admin UI's
+ * tab/status filters fail @IsEnum validation and return 400.
+ */
+const toLowerEnum = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.toLowerCase() : value;
 
 export enum TransactionType {
   ALL = 'all',
@@ -76,6 +85,7 @@ export class GetTransactionsDto {
     default: TransactionType.ALL,
   })
   @IsOptional()
+  @Transform(toLowerEnum)
   @IsEnum(TransactionType)
   type?: TransactionType = TransactionType.ALL;
 
@@ -85,6 +95,7 @@ export class GetTransactionsDto {
     required: false,
   })
   @IsOptional()
+  @Transform(toLowerEnum)
   @IsEnum(TransactionStatus)
   status?: TransactionStatus;
 

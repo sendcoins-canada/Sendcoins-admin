@@ -79,9 +79,25 @@ export class UnifiedTransactionResponseDto {
   fee?: number;
 
   @ApiProperty({
+    required: false,
+    description:
+      "Currency the `fee` is denominated in. Differs from the transaction currency for conversions (crypto→fiat fees are in fiat, fiat→crypto fees are in USD).",
+  })
+  feeCurrency?: string;
+
+  @ApiProperty({
     enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],
   })
   status!: string;
+
+  @ApiProperty({ required: false, description: "Owning user's email, when available on the record" })
+  userEmail?: string;
+
+  @ApiProperty({ required: false, description: "Owning user's display name, when available" })
+  userName?: string;
+
+  @ApiProperty({ required: false, description: "Owning user's API key (always available)" })
+  userApiKey?: string;
 
   @ApiProperty()
   isFlagged!: boolean;

@@ -180,23 +180,119 @@ export class TransactionsService {
       }),
     ]);
 
-    // Wallet transfers and fiat transfers are typically outgoing from the user's perspective
-    const incoming = historyIncoming;
-    const outgoing = historyOutgoing + transferCompleted + fiatCompleted;
-    const conversion = historyCompleted; // All buy/sell are conversions
+    // ---- Raw-SQL sources (withdrawals / fiat-crypto buys / crypto-fiat convs) ----
+    // These only belong in the unified list (and therefore the stats) when the
+    // caller is NOT scoping to a specific Prisma-backed category — mirrors the
+    // `fetchRaw` gate in findAll so the cards and the table reconcile.
+    const includeRaw =
+      type !== TransactionType.BUY_SELL &&
+      type !== TransactionType.WALLET_TRANSFER &&
+      type !== TransactionType.FIAT_TRANSFER;
+
+    type RawStatRow = {
+      completed: bigint | number;
+      pending: bigint | number;
+      failed: bigint | number;
+      crypto_vol: string | number | null;
+      fiat_vol: string | number | null;
+    };
+    const emptyRawStat: RawStatRow = {
+      completed: 0,
+      pending: 0,
+      failed: 0,
+      crypto_vol: 0,
+      fiat_vol: 0,
+    };
+    const queryRawStat = async (sql: string): Promise<RawStatRow> => {
+      try {
+        const rows = await this.prisma.client.$queryRawUnsafe<RawStatRow[]>(sql);
+        return rows[0] ?? emptyRawStat;
+      } catch {
+        // table may not exist yet
+        return emptyRawStat;
+      }
+    };
+
+    const [withdrawalStat, buyStat, convStat] = includeRaw
+      ? await Promise.all([
+          // withdrawals: status 'completed' = completed, 'ngn_credit_failed' = failed
+          queryRawStat(
+            `SELECT
+               COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+               COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+               COUNT(*) FILTER (WHERE status IN ('failed', 'ngn_credit_failed')) AS failed,
+               COALESCE(SUM(source_amount), 0) AS crypto_vol,
+               COALESCE(SUM(ngn_amount), 0) AS fiat_vol
+             FROM withdrawals`,
+          ),
+          // fiat-crypto buys: fiat leg = source_amount, crypto leg = destination_amount
+          queryRawStat(
+            `SELECT
+               COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+               COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+               COUNT(*) FILTER (WHERE status = 'failed') AS failed,
+               COALESCE(SUM(destination_amount), 0) AS crypto_vol,
+               COALESCE(SUM(source_amount), 0) AS fiat_vol
+             FROM fiat_crypto_conversions`,
+          ),
+          // crypto-fiat convs: crypto leg = source_amount, fiat leg = final_fiat_amount
+          queryRawStat(
+            `SELECT
+               COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+               COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+               COUNT(*) FILTER (WHERE status = 'failed') AS failed,
+               COALESCE(SUM(source_amount), 0) AS crypto_vol,
+               COALESCE(SUM(COALESCE(final_fiat_amount, destination_amount)), 0) AS fiat_vol
+             FROM crypto_fiat_conversions`,
+          ),
+        ])
+      : [emptyRawStat, emptyRawStat, emptyRawStat];
+
+    const rawCompleted =
+      Number(withdrawalStat.completed) +
+      Number(buyStat.completed) +
+      Number(convStat.completed);
+    const rawPending =
+      Number(withdrawalStat.pending) +
+      Number(buyStat.pending) +
+      Number(convStat.pending);
+    const rawFailed =
+      Number(withdrawalStat.failed) +
+      Number(buyStat.failed) +
+      Number(convStat.failed);
+    const rawCryptoVolume =
+      Number(withdrawalStat.crypto_vol || 0) +
+      Number(buyStat.crypto_vol || 0) +
+      Number(convStat.crypto_vol || 0);
+    const rawFiatVolume =
+      Number(withdrawalStat.fiat_vol || 0) +
+      Number(buyStat.fiat_vol || 0) +
+      Number(convStat.fiat_vol || 0);
+
+    // Direction-aligned byType counts (completed only, matching findAll's derived
+    // direction): buys = INCOMING, withdrawals = OUTGOING, convs = CONVERSION.
+    const incoming = historyIncoming + Number(buyStat.completed);
+    const outgoing =
+      historyOutgoing +
+      transferCompleted +
+      fiatCompleted +
+      Number(withdrawalStat.completed);
+    const conversion = historyCompleted + Number(convStat.completed);
 
     return {
       totalVolume: {
         crypto:
           Number(historyTotalVolume._sum.crypto_amount || 0) +
-          Number(transferTotalVolume._sum.amount || 0),
+          Number(transferTotalVolume._sum.amount || 0) +
+          rawCryptoVolume,
         fiat:
           Number(historyTotalVolume._sum.currency_amount || 0) +
-          Number(fiatTotalVolume._sum.amount || 0),
+          Number(fiatTotalVolume._sum.amount || 0) +
+          rawFiatVolume,
       },
-      completed: historyCompleted + transferCompleted + fiatCompleted,
-      pending: historyPending + transferPending + fiatPending,
-      failed: historyFailed + transferFailed + fiatFailed,
+      completed: historyCompleted + transferCompleted + fiatCompleted + rawCompleted,
+      pending: historyPending + transferPending + fiatPending + rawPending,
+      failed: historyFailed + transferFailed + fiatFailed + rawFailed,
       flagged: historyFlagged + transferFlagged + fiatFlagged,
       byType: {
         incoming,
@@ -231,72 +327,46 @@ export class TransactionsService {
       dto.type !== TransactionType.BUY_SELL &&
       dto.type !== TransactionType.WALLET_TRANSFER;
 
-    // Get counts
-    const [historyCount, transferCount, fiatCount] = await Promise.all([
-      fetchHistory
-        ? this.prisma.client.transaction_history.count({
-            where: historyFilters,
-          })
-        : Promise.resolve(0),
-      fetchTransfers
-        ? this.prisma.client.wallet_transfers.count({ where: transferFilters })
-        : Promise.resolve(0),
-      fetchFiat
-        ? this.prisma.client.fiat_bank_transfers.count({ where: fiatFilters })
-        : Promise.resolve(0),
-    ]);
+    // Raw-SQL sources (withdrawals / buys / conversions) only belong in the
+    // unified list when the caller is NOT scoping to a specific Prisma-backed
+    // category. Skipping them otherwise was the cause of unfiltered rows
+    // leaking through the tab/status/currency filters.
+    const fetchRaw =
+      dto.type !== TransactionType.BUY_SELL &&
+      dto.type !== TransactionType.WALLET_TRANSFER &&
+      dto.type !== TransactionType.FIAT_TRANSFER;
 
-    // Count new tables (raw SQL since no Prisma model)
-    let withdrawalCount = 0;
-    let buyCount = 0;
-    let cryptoFiatCount = 0;
-    try {
-      const [wdC, buyC, cfC] = await Promise.all([
-        this.prisma.client.$queryRawUnsafe<[{count: bigint}]>('SELECT COUNT(*) as count FROM withdrawals'),
-        this.prisma.client.$queryRawUnsafe<[{count: bigint}]>('SELECT COUNT(*) as count FROM fiat_crypto_conversions'),
-        this.prisma.client.$queryRawUnsafe<[{count: bigint}]>('SELECT COUNT(*) as count FROM crypto_fiat_conversions'),
-      ]);
-      withdrawalCount = Number(wdC[0]?.count || 0);
-      buyCount = Number(buyC[0]?.count || 0);
-      cryptoFiatCount = Number(cfC[0]?.count || 0);
-    } catch { /* tables may not exist yet */ }
-
-    const total = historyCount + transferCount + fiatCount + withdrawalCount + buyCount + cryptoFiatCount;
-    const totalPages = Math.ceil(total / limit);
-
-    // Fetch transactions with a reasonable buffer to account for unified sorting
-    // For better performance with very large datasets (>10k records), consider:
-    // 1. Cursor-based pagination
-    // 2. Database views/union queries
-    // 3. Separate endpoints for each transaction type
-    const fetchLimit = Math.min(
-      limit + skip + limit * 0.5, // Fetch extra to account for sorting
-      Math.max(limit * 3, 500), // But cap at reasonable limit
-    );
+    // Correct cross-source filtering + pagination requires the full filtered
+    // set in memory (direction, status and currency are derived per-row and
+    // cannot all be expressed as a single SQL WHERE across heterogeneous
+    // tables). Fetch every matching row up to a safety cap, then filter, count
+    // and paginate uniformly below. Fine at current scale (hundreds of rows);
+    // a DB UNION view would be the next step if volume grows.
+    const FETCH_CAP = 5000;
 
     const [historyTransactions, transferTransactions, fiatTransactions] =
       await Promise.all([
-        fetchHistory && historyCount > 0
+        fetchHistory
           ? this.prisma.client.transaction_history.findMany({
               where: historyFilters,
-              take: fetchTransfers || fetchFiat ? fetchLimit : limit + skip,
+              take: FETCH_CAP,
               orderBy: this.buildOrderBy(dto, 'history'),
               include: {
                 merchants: true,
               },
             })
           : Promise.resolve([]),
-        fetchTransfers && transferCount > 0
+        fetchTransfers
           ? this.prisma.client.wallet_transfers.findMany({
               where: transferFilters,
-              take: fetchHistory || fetchFiat ? fetchLimit : limit + skip,
+              take: FETCH_CAP,
               orderBy: this.buildOrderBy(dto, 'transfer'),
             })
           : Promise.resolve([]),
-        fetchFiat && fiatCount > 0
+        fetchFiat
           ? this.prisma.client.fiat_bank_transfers.findMany({
               where: fiatFilters,
-              take: fetchHistory || fetchTransfers ? fetchLimit : limit + skip,
+              take: FETCH_CAP,
               orderBy: this.buildOrderBy(dto, 'fiat'),
             })
           : Promise.resolve([]),
@@ -304,7 +374,7 @@ export class TransactionsService {
 
     // Fetch withdrawals (crypto-to-NGN)
     let withdrawalTransactions: UnifiedTransactionResponseDto[] = [];
-    try {
+    if (fetchRaw) try {
       const withdrawalRows = await this.prisma.client.$queryRawUnsafe<Array<{
         id: string; reference: string; user_api_key: string;
         source_asset: string; source_network: string; source_amount: string;
@@ -316,7 +386,7 @@ export class TransactionsService {
                 ngn_amount, platform_fee_crypto, strategy, status, onchain_tx_hash,
                 failure_reason, created_at, completed_at
          FROM withdrawals ORDER BY created_at DESC LIMIT $1`,
-        fetchLimit
+        FETCH_CAP
       );
       withdrawalTransactions = withdrawalRows.map((wd) => ({
         id: 0,
@@ -324,10 +394,12 @@ export class TransactionsService {
         reference: wd.reference,
         type: 'OUTGOING' as const,
         transactionCategory: 'WITHDRAWAL',
+        userApiKey: wd.user_api_key ?? undefined,
         dateInitiated: new Date(wd.created_at),
         currency: { crypto: wd.source_asset, fiat: 'NGN', display: wd.source_asset },
         amount: { crypto: Number(wd.source_amount), fiat: Number(wd.ngn_amount), display: `${wd.source_amount} ${wd.source_asset} → ${wd.ngn_amount} NGN` },
         fee: Number(wd.platform_fee_crypto),
+        feeCurrency: wd.source_asset, // platform_fee_crypto is denominated in the source crypto
         status: wd.status === 'completed' ? 'completed' : wd.status === 'ngn_credit_failed' ? 'failed' : wd.status,
         isFlagged: false,
         source: { address: wd.user_api_key, type: 'WALLET' },
@@ -342,7 +414,7 @@ export class TransactionsService {
 
     // Fetch fiat-to-crypto buys
     let buyTransactions: UnifiedTransactionResponseDto[] = [];
-    try {
+    if (fetchRaw) try {
       const buyRows = await this.prisma.client.$queryRawUnsafe<Array<{
         conversion_id: number; reference: string; keychain: string;
         user_api_key: string; user_email: string;
@@ -355,7 +427,7 @@ export class TransactionsService {
                 source_currency, source_amount, destination_asset, destination_network,
                 destination_amount, platform_fee_fiat, platform_fee_usd, status, created_at_timestamp, completed_at
          FROM fiat_crypto_conversions ORDER BY created_at DESC LIMIT $1`,
-        fetchLimit
+        FETCH_CAP
       );
       buyTransactions = buyRows.map((buy) => ({
         id: buy.conversion_id,
@@ -363,10 +435,13 @@ export class TransactionsService {
         reference: buy.reference,
         type: 'INCOMING' as const,
         transactionCategory: 'FIAT_CRYPTO_BUY',
+        userEmail: buy.user_email ?? undefined,
+        userApiKey: buy.user_api_key ?? undefined,
         dateInitiated: buy.created_at_timestamp ? new Date(buy.created_at_timestamp) : new Date(),
         currency: { crypto: buy.destination_asset, fiat: buy.source_currency, display: buy.destination_asset },
         amount: { crypto: Number(buy.destination_amount), fiat: Number(buy.source_amount), display: `${buy.destination_amount} ${buy.destination_asset}` },
         fee: Number(buy.platform_fee_usd || 0),
+        feeCurrency: 'USD', // platform_fee_usd is denominated in USD, not the bought asset
         status: buy.status || 'pending',
         isFlagged: false,
         source: { address: `${buy.source_currency} Wallet`, type: 'WALLET' as const, name: `${buy.source_amount} ${buy.source_currency}` },
@@ -380,7 +455,7 @@ export class TransactionsService {
 
     // Fetch crypto-to-fiat conversions
     let cryptoFiatTransactions: UnifiedTransactionResponseDto[] = [];
-    try {
+    if (fetchRaw) try {
       const convRows = await this.prisma.client.$queryRawUnsafe<Array<{
         conversion_id: number; reference: string; keychain: string;
         user_api_key: string; user_email: string;
@@ -394,7 +469,7 @@ export class TransactionsService {
                 destination_currency, destination_amount, final_fiat_amount,
                 platform_fee_amount, status, created_at_timestamp, completed_at
          FROM crypto_fiat_conversions ORDER BY created_at DESC LIMIT $1`,
-        fetchLimit
+        FETCH_CAP
       );
       cryptoFiatTransactions = convRows.map((conv) => ({
         id: conv.conversion_id,
@@ -402,10 +477,13 @@ export class TransactionsService {
         reference: conv.reference,
         type: 'CONVERSION' as const,
         transactionCategory: 'CRYPTO_FIAT_CONVERSION',
+        userEmail: conv.user_email ?? undefined,
+        userApiKey: conv.user_api_key ?? undefined,
         dateInitiated: conv.created_at_timestamp ? new Date(conv.created_at_timestamp) : new Date(),
         currency: { crypto: conv.source_asset, fiat: conv.destination_currency, display: conv.source_asset },
         amount: { crypto: Number(conv.source_amount), fiat: Number(conv.final_fiat_amount || conv.destination_amount), display: `${conv.source_amount} ${conv.source_asset} → ${conv.final_fiat_amount || conv.destination_amount} ${conv.destination_currency}` },
         fee: Number(conv.platform_fee_amount || 0),
+        feeCurrency: conv.destination_currency, // platform_fee_amount is deducted in the destination fiat (e.g. NGN), not the source crypto
         status: conv.status || 'pending',
         isFlagged: false,
         source: { address: conv.user_api_key, type: 'WALLET', name: conv.user_email },
@@ -426,8 +504,60 @@ export class TransactionsService {
       ...cryptoFiatTransactions,
     ];
 
+    // ---- Uniform cross-source filtering ----
+    // These run against the unified/transformed rows so they apply identically
+    // to Prisma tables and the raw-SQL sources, and use the same status/currency
+    // vocabulary the UI displays.
+    const wantStatus = dto.status ? String(dto.status).toLowerCase() : undefined;
+    const wantCurrency = dto.currency ? dto.currency.toLowerCase() : undefined;
+    const wantSearch = dto.search ? dto.search.toLowerCase() : undefined;
+    const wantDirection =
+      dto.type === TransactionType.INCOMING
+        ? 'INCOMING'
+        : dto.type === TransactionType.OUTGOING
+          ? 'OUTGOING'
+          : dto.type === TransactionType.CONVERSION
+            ? 'CONVERSION'
+            : undefined;
+
+    const statusMatches = (status: string): boolean => {
+      if (!wantStatus) return true;
+      if (wantStatus === '__pending_approvals__') {
+        return status === 'pending' || status === 'pending_funding';
+      }
+      return status?.toLowerCase() === wantStatus;
+    };
+
+    const filteredTransactions = unifiedTransactions.filter((t) => {
+      if (wantDirection && t.type !== wantDirection) return false;
+      if (!statusMatches(t.status)) return false;
+      if (wantCurrency) {
+        const cur = [t.currency?.crypto, t.currency?.fiat, t.currency?.display]
+          .filter(Boolean)
+          .map((c) => String(c).toLowerCase());
+        if (!cur.includes(wantCurrency)) return false;
+      }
+      if (wantSearch) {
+        const haystack = [
+          t.txId,
+          t.reference,
+          t.userEmail,
+          t.userApiKey,
+          t.source?.address,
+          t.source?.name,
+          t.destination?.address,
+          t.destination?.name,
+          t.txHash,
+        ]
+          .filter(Boolean)
+          .map((v) => String(v).toLowerCase());
+        if (!haystack.some((v) => v.includes(wantSearch))) return false;
+      }
+      return true;
+    });
+
     // Sort unified transactions
-    unifiedTransactions.sort((a, b) => {
+    filteredTransactions.sort((a, b) => {
       if (dto.sortBy === SortBy.AMOUNT) {
         const aAmount = a.amount.crypto || a.amount.fiat || 0;
         const bAmount = b.amount.crypto || b.amount.fiat || 0;
@@ -458,8 +588,11 @@ export class TransactionsService {
       return b.createdAt.getTime() - a.createdAt.getTime();
     });
 
-    // Apply pagination to sorted results
-    const paginatedTransactions = unifiedTransactions.slice(skip, skip + limit);
+    // Pagination is derived from the fully-filtered set so totals always match
+    // the rows the client can actually page through.
+    const total = filteredTransactions.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const paginatedTransactions = filteredTransactions.slice(skip, skip + limit);
 
     return {
       data: paginatedTransactions,
@@ -1785,24 +1918,12 @@ export class TransactionsService {
       filter.is_flagged = dto.flagged;
     }
 
-    if (dto.currency) {
-      filter.OR = [
-        { crypto_sign: dto.currency },
-        { currency_sign: dto.currency },
-      ];
-    }
-
     if (dto.asset) {
       filter.asset_type = dto.asset;
     }
 
-    if (dto.search) {
-      filter.OR = [
-        { keychain: { contains: dto.search } },
-        { reference: { contains: dto.search } },
-        { user_api_key: { contains: dto.search } },
-      ];
-    }
+    // NOTE: currency + search are applied uniformly in-memory in findAll so they
+    // also cover the raw-SQL sources and avoid case/overwrite mismatches.
 
     if (dto.dateFrom || dto.dateTo) {
       const dateFrom = dto.dateFrom ? new Date(dto.dateFrom) : undefined;
@@ -1836,17 +1957,7 @@ export class TransactionsService {
       filter.is_flagged = dto.flagged;
     }
 
-    if (dto.currency) {
-      filter.asset = dto.currency;
-    }
-
-    if (dto.search) {
-      filter.OR = [
-        { reference: { contains: dto.search } },
-        { user_api_key: { contains: dto.search } },
-        { recipient_wallet_address: { contains: dto.search } },
-      ];
-    }
+    // NOTE: currency + search applied uniformly in-memory in findAll.
 
     if (dto.dateFrom || dto.dateTo) {
       const dateFrom = dto.dateFrom ? new Date(dto.dateFrom) : undefined;
@@ -1877,25 +1988,7 @@ export class TransactionsService {
       filter.is_flagged = dto.flagged;
     }
 
-    // Build OR conditions for currency and search
-    const orConditions: Array<Record<string, unknown>> = [];
-
-    if (dto.currency) {
-      orConditions.push({ currency: dto.currency });
-    }
-
-    if (dto.search) {
-      orConditions.push(
-        { reference: { contains: dto.search } },
-        { user_api_key: { contains: dto.search } },
-        { user_email: { contains: dto.search } },
-        { account_number: { contains: dto.search } },
-      );
-    }
-
-    if (orConditions.length > 0) {
-      filter.OR = orConditions;
-    }
+    // NOTE: currency + search applied uniformly in-memory in findAll.
 
     if (dto.dateFrom || dto.dateTo) {
       const dateFrom = dto.dateFrom ? new Date(dto.dateFrom) : undefined;
@@ -1965,6 +2058,8 @@ export class TransactionsService {
       reference: txRecord.reference ?? undefined,
       type: 'OUTGOING', // Fiat bank transfers are always outgoing
       transactionCategory: 'FIAT_TRANSFER',
+      userEmail: txRecord.user_email ?? undefined,
+      userApiKey: txRecord.user_api_key ?? undefined,
       dateInitiated: createdAt,
       currency: {
         fiat: txRecord.currency ?? undefined,
@@ -2044,6 +2139,7 @@ export class TransactionsService {
       reference: txRecord.reference ?? undefined,
       type: this.determineTransactionType(txRecord, 'history'),
       transactionCategory: 'BUY_SELL',
+      userApiKey: txRecord.user_api_key ?? undefined,
       dateInitiated: createdAt,
       currency: {
         crypto: txRecord.crypto_sign ?? undefined,
@@ -2133,6 +2229,7 @@ export class TransactionsService {
       reference: txRecord.reference ?? undefined,
       type: transactionType,
       transactionCategory: 'WALLET_TRANSFER',
+      userApiKey: txRecord.user_api_key ?? undefined,
       dateInitiated: createdAt,
       currency: {
         crypto: txRecord.asset ?? undefined,
@@ -2143,6 +2240,7 @@ export class TransactionsService {
         display: amountDisplay,
       },
       fee: txRecord.fee ? Number(txRecord.fee) : undefined,
+      feeCurrency: txRecord.fee ? txRecord.asset : undefined, // network fee is in the transferred crypto asset
       status: txRecord.status || 'pending',
       isFlagged: txRecord.is_flagged || false,
       flaggedAt: txRecord.flagged_at
