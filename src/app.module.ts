@@ -11,6 +11,7 @@ import { UsersModule } from './users/users.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ActivityModule } from './activity/activity.module';
 import { PlatformModule } from './platform/platform.module';
 import { WalletsModule } from './wallets/wallets.module';
 import { KycModule } from './kyc/kyc.module';
@@ -38,6 +39,7 @@ import { GlobalAuthGuard } from './auth/global-auth.guard';
     AuditLogsModule,
     TransactionsModule,
     NotificationsModule,
+    ActivityModule,
     PlatformModule,
     WalletsModule,
     KycModule,
