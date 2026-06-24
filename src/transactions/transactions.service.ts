@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   GetTransactionsDto,
   TransactionType,
+  TransactionCategoryFilter,
   SortBy,
   SortOrder,
 } from './dto/get-transactions.dto';
@@ -20,6 +21,7 @@ import {
   UnifiedTransactionResponseDto,
   TransactionStatsResponseDto,
   PaginatedTransactionsResponseDto,
+  TransactionHistoryItemDto,
 } from './dto/transaction-response.dto';
 import {
   Prisma,
@@ -528,9 +530,23 @@ export class TransactionsService {
       return status?.toLowerCase() === wantStatus;
     };
 
+    // "Naira" view: pure fiat (NGN) money movement only — bank funding and
+    // payouts. A row qualifies when it carries an NGN leg AND no crypto leg,
+    // which excludes crypto→NGN withdrawals, NGN→crypto buys and crypto↔NGN
+    // conversions (each drags a crypto asset along even though it touches naira)
+    // as well as pure crypto wallet transfers.
+    const wantNairaOnly = dto.category === TransactionCategoryFilter.NAIRA;
+
     const filteredTransactions = unifiedTransactions.filter((t) => {
       if (wantDirection && t.type !== wantDirection) return false;
       if (!statusMatches(t.status)) return false;
+      if (wantNairaOnly) {
+        const hasFiatLeg =
+          Boolean(t.currency?.fiat) || typeof t.amount?.fiat === 'number';
+        const hasCryptoLeg =
+          Boolean(t.currency?.crypto) || typeof t.amount?.crypto === 'number';
+        if (!hasFiatLeg || hasCryptoLeg) return false;
+      }
       if (wantCurrency) {
         const cur = [t.currency?.crypto, t.currency?.fiat, t.currency?.display]
           .filter(Boolean)
@@ -624,7 +640,37 @@ export class TransactionsService {
   async findOne(
     id: number,
     type?: 'transaction_history' | 'wallet_transfer' | 'fiat_transfer',
+    source?: string,
   ): Promise<UnifiedTransactionResponseDto> {
+    // The unified list merges 6 source tables, each keyed by its own primary
+    // key (history_id, transfer_id, conversion_id, ...). Those id ranges
+    // OVERLAP, so the numeric id alone is ambiguous. When the caller tells us
+    // the source (via transactionCategory), route ONLY to that table — never
+    // fall through to another table, which would surface a colliding record
+    // belonging to a different user.
+    const src = source?.toUpperCase();
+
+    // Conversions / withdrawals don't live in the 3 base tables — resolve them
+    // directly by their own primary key.
+    if (src === 'FIAT_CRYPTO_BUY') {
+      const dto = await this.findFiatCryptoBuyById(id);
+      if (dto) return this.enrichTransactionDetail(dto);
+      throw new NotFoundException(`Transaction with ID ${id} not found`);
+    }
+    if (src === 'CRYPTO_FIAT_CONVERSION') {
+      const dto = await this.findCryptoFiatConversionById(id);
+      if (dto) return this.enrichTransactionDetail(dto);
+      throw new NotFoundException(`Transaction with ID ${id} not found`);
+    }
+
+    // Map the remaining source categories onto the explicit `type` so the
+    // base-table lookups below run against the single correct table.
+    if (!type) {
+      if (src === 'BUY_SELL') type = 'transaction_history';
+      else if (src === 'WALLET_TRANSFER') type = 'wallet_transfer';
+      else if (src === 'FIAT_TRANSFER') type = 'fiat_transfer';
+    }
+
     if (type === 'transaction_history' || !type) {
       const transaction =
         await this.prisma.client.transaction_history.findUnique({
@@ -633,7 +679,9 @@ export class TransactionsService {
         });
 
       if (transaction) {
-        return this.transformHistoryTransaction(transaction);
+        return this.enrichTransactionDetail(
+          this.transformHistoryTransaction(transaction),
+        );
       }
     }
 
@@ -643,7 +691,9 @@ export class TransactionsService {
       });
 
       if (transaction) {
-        return this.transformTransferTransaction(transaction);
+        return this.enrichTransactionDetail(
+          this.transformTransferTransaction(transaction),
+        );
       }
     }
 
@@ -654,11 +704,278 @@ export class TransactionsService {
         });
 
       if (transaction) {
-        return this.transformFiatTransaction(transaction);
+        return this.enrichTransactionDetail(
+          this.transformFiatTransaction(transaction),
+        );
       }
     }
 
     throw new NotFoundException(`Transaction with ID ${id} not found`);
+  }
+
+  /**
+   * Resolve a single fiat→crypto buy (fiat_crypto_conversions) by its
+   * conversion_id and map it to the unified DTO shape. Mirrors the inline
+   * mapping used by findAll so the detail view matches the list row.
+   */
+  private async findFiatCryptoBuyById(
+    id: number,
+  ): Promise<UnifiedTransactionResponseDto | null> {
+    const rows = await this.prisma.client.$queryRawUnsafe<
+      Array<{
+        conversion_id: number;
+        reference: string;
+        keychain: string;
+        user_api_key: string;
+        user_email: string;
+        source_currency: string;
+        source_amount: string;
+        destination_asset: string;
+        destination_network: string;
+        destination_amount: string;
+        platform_fee_fiat: string;
+        platform_fee_usd: string;
+        status: string;
+        created_at_timestamp: Date | null;
+        completed_at: bigint | null;
+      }>
+    >(
+      `SELECT conversion_id, reference, keychain, user_api_key, user_email,
+              source_currency, source_amount, destination_asset, destination_network,
+              destination_amount, platform_fee_fiat, platform_fee_usd, status,
+              created_at_timestamp, completed_at
+       FROM fiat_crypto_conversions WHERE conversion_id = $1 LIMIT 1`,
+      id,
+    );
+    const buy = rows[0];
+    if (!buy) return null;
+    return {
+      id: buy.conversion_id,
+      txId: buy.keychain,
+      reference: buy.reference,
+      type: 'INCOMING',
+      transactionCategory: 'FIAT_CRYPTO_BUY',
+      userEmail: buy.user_email ?? undefined,
+      userApiKey: buy.user_api_key ?? undefined,
+      dateInitiated: buy.created_at_timestamp
+        ? new Date(buy.created_at_timestamp)
+        : new Date(),
+      currency: {
+        crypto: buy.destination_asset,
+        fiat: buy.source_currency,
+        display: buy.destination_asset,
+      },
+      amount: {
+        crypto: Number(buy.destination_amount),
+        fiat: Number(buy.source_amount),
+        display: `${buy.destination_amount} ${buy.destination_asset}`,
+      },
+      fee: Number(buy.platform_fee_usd || 0),
+      feeCurrency: 'USD',
+      status: buy.status || 'pending',
+      isFlagged: false,
+      source: {
+        address: `${buy.source_currency} Wallet`,
+        type: 'WALLET',
+        name: `${buy.source_amount} ${buy.source_currency}`,
+      },
+      destination: {
+        address: buy.user_api_key || 'N/A',
+        type: 'WALLET',
+        name: `${buy.destination_asset} Wallet`,
+        network: buy.destination_network,
+      },
+      notes: `Bought with ${buy.source_amount} ${buy.source_currency} (fee: ${buy.platform_fee_fiat} ${buy.source_currency})`,
+      network: buy.destination_network,
+      createdAt: buy.created_at_timestamp
+        ? new Date(buy.created_at_timestamp)
+        : new Date(),
+      updatedAt: buy.completed_at
+        ? new Date(Number(buy.completed_at) * 1000)
+        : undefined,
+    };
+  }
+
+  /**
+   * Resolve a single crypto→fiat conversion (crypto_fiat_conversions) by its
+   * conversion_id and map it to the unified DTO shape.
+   */
+  private async findCryptoFiatConversionById(
+    id: number,
+  ): Promise<UnifiedTransactionResponseDto | null> {
+    const rows = await this.prisma.client.$queryRawUnsafe<
+      Array<{
+        conversion_id: number;
+        reference: string;
+        keychain: string;
+        user_api_key: string;
+        user_email: string;
+        source_asset: string;
+        source_network: string;
+        source_amount: string;
+        destination_currency: string;
+        destination_amount: string;
+        final_fiat_amount: string;
+        platform_fee_amount: string;
+        status: string;
+        created_at_timestamp: Date | null;
+        completed_at: bigint | null;
+      }>
+    >(
+      `SELECT conversion_id, reference, keychain, user_api_key, user_email,
+              source_asset, source_network, source_amount, destination_currency,
+              destination_amount, final_fiat_amount, platform_fee_amount, status,
+              created_at_timestamp, completed_at
+       FROM crypto_fiat_conversions WHERE conversion_id = $1 LIMIT 1`,
+      id,
+    );
+    const conv = rows[0];
+    if (!conv) return null;
+    return {
+      id: conv.conversion_id,
+      txId: conv.keychain,
+      reference: conv.reference,
+      type: 'CONVERSION',
+      transactionCategory: 'CRYPTO_FIAT_CONVERSION',
+      userEmail: conv.user_email ?? undefined,
+      userApiKey: conv.user_api_key ?? undefined,
+      dateInitiated: conv.created_at_timestamp
+        ? new Date(conv.created_at_timestamp)
+        : new Date(),
+      currency: {
+        crypto: conv.source_asset,
+        fiat: conv.destination_currency,
+        display: conv.source_asset,
+      },
+      amount: {
+        crypto: Number(conv.source_amount),
+        fiat: Number(conv.final_fiat_amount || conv.destination_amount),
+        display: `${conv.source_amount} ${conv.source_asset} → ${conv.final_fiat_amount || conv.destination_amount} ${conv.destination_currency}`,
+      },
+      fee: Number(conv.platform_fee_amount || 0),
+      feeCurrency: conv.destination_currency,
+      status: conv.status || 'pending',
+      isFlagged: false,
+      source: {
+        address: conv.user_api_key,
+        type: 'WALLET',
+        name: conv.user_email,
+      },
+      destination: {
+        address: `${conv.destination_currency} Wallet`,
+        type: 'WALLET',
+        name: `${conv.destination_currency} Wallet`,
+        network: conv.source_network,
+      },
+      network: conv.source_network,
+      createdAt: conv.created_at_timestamp
+        ? new Date(conv.created_at_timestamp)
+        : new Date(),
+      updatedAt: conv.completed_at
+        ? new Date(Number(conv.completed_at) * 1000)
+        : undefined,
+    };
+  }
+
+  /**
+   * Enrich a single transaction (detail view only) with data that is too
+   * expensive to compute on the list path:
+   *  - resolves the owning user's email + display name via send_coin_user
+   *  - derives amountUsd for stablecoins (USDT/USDC are 1:1 with USD)
+   *  - synthesizes a lifecycle history[] from the record's own timestamp fields
+   */
+  private async enrichTransactionDetail(
+    dto: UnifiedTransactionResponseDto,
+  ): Promise<UnifiedTransactionResponseDto> {
+    // 1. Resolve user email + display name
+    if (dto.userApiKey || dto.userEmail) {
+      const user = await this.prisma.client.send_coin_user.findFirst({
+        where: {
+          OR: [
+            ...(dto.userApiKey
+              ? [{ api_key: dto.userApiKey }, { user_email: dto.userApiKey }]
+              : []),
+            ...(dto.userEmail ? [{ user_email: dto.userEmail }] : []),
+          ],
+        },
+        select: { first_name: true, last_name: true, user_email: true },
+      });
+
+      if (user) {
+        dto.userEmail = dto.userEmail ?? user.user_email ?? undefined;
+        const fullName = [user.first_name, user.last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+        if (fullName) {
+          dto.userName = fullName;
+        }
+      }
+    }
+
+    // 2. Derive USD value for stablecoins (1 USDT/USDC ≈ 1 USD)
+    const cryptoSymbol = dto.currency?.crypto?.toUpperCase();
+    if (
+      (cryptoSymbol === 'USDT' || cryptoSymbol === 'USDC') &&
+      dto.amount?.crypto
+    ) {
+      dto.amountUsd = dto.amount.crypto;
+    }
+
+    // 3. Synthesize lifecycle history from the record's own fields
+    dto.history = this.synthesizeHistory(dto);
+
+    return dto;
+  }
+
+  /**
+   * Build a chronological lifecycle history for a single transaction from the
+   * timestamp fields already present on the record. No separate audit table.
+   */
+  private synthesizeHistory(
+    dto: UnifiedTransactionResponseDto,
+  ): TransactionHistoryItemDto[] {
+    const events: TransactionHistoryItemDto[] = [];
+
+    // Creation
+    events.push({
+      id: `${dto.id}-created`,
+      action: 'Transaction initiated',
+      status: 'pending',
+      performedByName: dto.userName || dto.userEmail || 'User',
+      timestamp: dto.dateInitiated || dto.createdAt,
+    });
+
+    // Flagged for review
+    if (dto.isFlagged && dto.flaggedAt) {
+      events.push({
+        id: `${dto.id}-flagged`,
+        action: 'Transaction flagged for review',
+        status: dto.status,
+        performedBy: dto.flaggedBy,
+        performedByName: dto.flaggedBy || 'Admin',
+        note: dto.flaggedReason,
+        timestamp: dto.flaggedAt,
+      });
+    }
+
+    // Status update (approve / cancel / etc.)
+    if (dto.statusUpdatedAt) {
+      events.push({
+        id: `${dto.id}-status`,
+        action: `Status updated to ${dto.status}`,
+        status: dto.status,
+        performedBy: dto.statusUpdatedBy,
+        performedByName: dto.statusUpdatedBy || 'Admin',
+        note: dto.statusNotes,
+        timestamp: dto.statusUpdatedAt,
+      });
+    }
+
+    return events.sort(
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    );
   }
 
   /**

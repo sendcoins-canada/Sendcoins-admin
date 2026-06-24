@@ -253,7 +253,7 @@ export class WalletsService {
       network: string | null;
     }> = [];
 
-    // First, get the user's api_key from send_coin_user table
+    // The per-coin wallet tables key off user_api_key, so resolve it first.
     const user = await this.prisma.client.send_coin_user.findUnique({
       where: { azer_id: userId },
       select: { api_key: true },
@@ -263,67 +263,43 @@ export class WalletsService {
       return { userId, wallets };
     }
 
-    // Find wallet addresses from transaction history where user was involved
     const userApiKey = user.api_key;
 
-    // Get wallet addresses from wallet_transfers (where user sent or received)
-    const transferWallets = await this.prisma.client.wallet_transfers.findMany({
-      where: { user_api_key: userApiKey },
-      select: {
-        asset: true,
-        recipient_wallet_address: true,
-        network: true,
-      },
-      distinct: ['recipient_wallet_address'],
-    });
+    // Query each per-coin wallet table directly for the user's own custodial
+    // wallet(s). These tables expose user_api_key, wallet_address, total_balance
+    // and network; they do NOT have azer_id or a freeze column.
+    for (const [cryptoType, tableName] of Object.entries(CRYPTO_TABLES)) {
+      const symbol = cryptoType.toUpperCase();
+      try {
+        const query = `
+          SELECT wallet_id, wallet_address, total_balance, network, timestamp
+          FROM ${tableName}
+          WHERE user_api_key = $1
+          ORDER BY timestamp DESC
+        `;
+        const rows = await this.prisma.client.$queryRawUnsafe<WalletRow[]>(
+          query,
+          userApiKey,
+        );
 
-    // Collect unique wallet addresses by crypto type from wallet_transfers
-    // Note: transaction_history doesn't store wallet addresses, only wallet_transfers does
-    const walletMap = new Map<string, Set<string>>();
-
-    for (const tx of transferWallets) {
-      if (tx.recipient_wallet_address && tx.asset) {
-        const cryptoType = tx.asset.toUpperCase();
-        if (!walletMap.has(cryptoType)) {
-          walletMap.set(cryptoType, new Set());
+        for (const w of rows) {
+          const balance = w.total_balance ?? 0;
+          // Stablecoins are ~1:1 with USD; other assets need a price feed we
+          // don't have here, so report 0 rather than a misleading figure.
+          const isStable = symbol === 'USDT' || symbol === 'USDC';
+          wallets.push({
+            crypto: symbol,
+            walletId: w.wallet_id,
+            walletAddress: w.wallet_address,
+            cryptoBalance: balance.toString(),
+            fiatBalance: isStable ? balance.toString() : '0',
+            frozen: false,
+            network: w.network,
+          });
         }
-        walletMap.get(cryptoType)!.add(tx.recipient_wallet_address);
-      }
-    }
-
-    // For each wallet address found, try to get wallet details from the wallet tables
-    for (const [cryptoType, addresses] of walletMap) {
-      const tableName = CRYPTO_TABLES[cryptoType as CryptoType];
-      if (!tableName) continue;
-
-      for (const address of addresses) {
-        try {
-          const query = `
-            SELECT wallet_id, wallet_address, total_balance, name, network, timestamp, freeze
-            FROM ${tableName}
-            WHERE wallet_address = $1
-            LIMIT 1
-          `;
-          const result = await this.prisma.client.$queryRawUnsafe<
-            Array<WalletRow & { freeze?: string }>
-          >(query, address);
-
-          if (result.length > 0) {
-            const w = result[0];
-            wallets.push({
-              crypto: cryptoType,
-              walletId: w.wallet_id,
-              walletAddress: w.wallet_address,
-              cryptoBalance: w.total_balance?.toString() || '0',
-              fiatBalance: '0',
-              frozen: w.freeze === 'yes',
-              network: w.network,
-            });
-          }
-        } catch {
-          // Wallet table query failed, skip this crypto type
-          continue;
-        }
+      } catch {
+        // Table/column mismatch for this crypto — skip it.
+        continue;
       }
     }
 

@@ -40,6 +40,10 @@ export enum TransactionStatus {
   CANCELLED = 'cancelled',
 }
 
+export enum TransactionCategoryFilter {
+  NAIRA = 'naira',
+}
+
 export enum SortBy {
   CREATED_AT = 'created_at',
   AMOUNT = 'amount',
@@ -114,6 +118,17 @@ export class GetTransactionsDto {
   @IsOptional()
   @IsEnum(['crypto', 'fiat'])
   asset?: 'crypto' | 'fiat';
+
+  @ApiProperty({
+    description:
+      'Filter to a high-level category. "naira" returns only pure fiat (NGN) money movements — bank funding (inflows) and payouts (outflows). Rows with a crypto leg (conversions, crypto withdrawals, crypto buys) are excluded.',
+    enum: TransactionCategoryFilter,
+    required: false,
+  })
+  @IsOptional()
+  @Transform(toLowerEnum)
+  @IsEnum(TransactionCategoryFilter)
+  category?: TransactionCategoryFilter;
 
   @ApiProperty({
     description: 'Filter by date from (ISO 8601 format)',

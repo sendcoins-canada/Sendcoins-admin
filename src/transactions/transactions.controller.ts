@@ -156,6 +156,14 @@ export class TransactionsController {
     required: false,
     description: 'Transaction type (auto-detected if not provided)',
   })
+  @ApiQuery({
+    name: 'source',
+    required: false,
+    description:
+      'Source category that disambiguates which table the id belongs to ' +
+      '(e.g. BUY_SELL, WALLET_TRANSFER, FIAT_TRANSFER, FIAT_CRYPTO_BUY, ' +
+      'CRYPTO_FIAT_CONVERSION). Prevents cross-source id collisions.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Transaction details',
@@ -166,8 +174,9 @@ export class TransactionsController {
     @Param('id', ParseIntPipe) id: number,
     @Query('type')
     type?: 'transaction_history' | 'wallet_transfer' | 'fiat_transfer',
+    @Query('source') source?: string,
   ): Promise<UnifiedTransactionResponseDto> {
-    return this.transactionsService.findOne(id, type);
+    return this.transactionsService.findOne(id, type, source);
   }
 
   @Patch(':id/status')

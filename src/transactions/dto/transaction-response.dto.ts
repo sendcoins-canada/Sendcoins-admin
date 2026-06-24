@@ -42,6 +42,29 @@ export class TransactionMerchantDto {
   bankAccount?: string;
 }
 
+export class TransactionHistoryItemDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty({ description: 'Human-readable lifecycle event' })
+  action!: string;
+
+  @ApiProperty({ description: 'Transaction status at this point in the lifecycle' })
+  status!: string;
+
+  @ApiProperty({ required: false })
+  performedBy?: string;
+
+  @ApiProperty()
+  performedByName!: string;
+
+  @ApiProperty({ required: false })
+  note?: string;
+
+  @ApiProperty()
+  timestamp!: Date;
+}
+
 export class UnifiedTransactionResponseDto {
   @ApiProperty()
   id!: number;
@@ -74,6 +97,12 @@ export class UnifiedTransactionResponseDto {
 
   @ApiProperty({ type: TransactionAmountDto })
   amount!: TransactionAmountDto;
+
+  @ApiProperty({ required: false, description: 'USD value of the amount, when derivable (e.g. stablecoins)' })
+  amountUsd?: number;
+
+  @ApiProperty({ type: [TransactionHistoryItemDto], required: false, description: 'Lifecycle events synthesized from the record (single-transaction detail only)' })
+  history?: TransactionHistoryItemDto[];
 
   @ApiProperty({ required: false })
   fee?: number;
