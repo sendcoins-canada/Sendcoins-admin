@@ -822,6 +822,34 @@ export class AdminAuthService {
       };
     }
 
+    // MFA enforcement: when ADMIN_MFA_ENFORCED=true, admins without MFA
+    // cannot get a full session. They receive a restricted setup token
+    // that only works on the MFA setup endpoints (see JwtAuthGuard).
+    if (process.env.ADMIN_MFA_ENFORCED === 'true') {
+      const setupPayload = {
+        sub: admin.id,
+        email: admin.email,
+        role: admin.role,
+        purpose: 'mfa_setup' as const,
+        type: 'admin' as const,
+      };
+      const setupToken = await this.jwtService.signAsync(setupPayload, {
+        expiresIn: '15m',
+      });
+
+      await this.audit.log('ADMIN_LOGIN_MFA_SETUP_REQUIRED', admin.id, {
+        email: admin.email,
+        ipAddress: clientIp,
+      });
+
+      return {
+        mfaSetupRequired: true,
+        setupToken,
+        message:
+          'MFA is required for all admin accounts. Use this token to set up MFA, then log in again.',
+      };
+    }
+
     // No MFA - proceed with login
     await this.prisma.client.adminUser.update({
       where: { id: admin.id },
@@ -987,9 +1015,11 @@ export class AdminAuthService {
 
     const adminMfa = admin as unknown as AdminWithMfa;
 
+    const enforced = process.env.ADMIN_MFA_ENFORCED === 'true';
+
     return {
       mfaEnabled: adminMfa.mfaEnabled ?? false,
-      mfaRequired: adminMfa.mfaEnabled ?? false, // For now, required if enabled
+      mfaRequired: enforced || (adminMfa.mfaEnabled ?? false),
     };
   }
 

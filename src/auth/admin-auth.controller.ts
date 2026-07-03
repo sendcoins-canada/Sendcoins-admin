@@ -29,6 +29,7 @@ import { UpdateIpAllowlistDto } from './dto/update-ip-allowlist.dto';
 import { RefreshTokenDto, LogoutDto } from './dto/refresh-token.dto';
 import { VerifyActionMfaDto } from './dto/verify-action-mfa.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { AllowMfaSetupToken } from './allow-mfa-setup.decorator';
 import { Request } from 'express';
 
 // Authenticated request type
@@ -292,6 +293,7 @@ export class AdminAuthController {
   }
 
   @Post('mfa/start-setup')
+  @AllowMfaSetupToken()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -304,6 +306,7 @@ export class AdminAuthController {
   }
 
   @Post('mfa/enable')
+  @AllowMfaSetupToken()
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -376,6 +379,7 @@ export class AdminAuthController {
   }
 
   @Get('mfa/status')
+  @AllowMfaSetupToken()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
