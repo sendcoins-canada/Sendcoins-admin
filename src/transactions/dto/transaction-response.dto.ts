@@ -149,6 +149,15 @@ export class UnifiedTransactionResponseDto {
   @ApiProperty({ required: false })
   txHash?: string;
 
+  @ApiProperty({ required: false, description: 'Block explorer URL for the on-chain transaction, when a tx hash exists' })
+  explorerUrl?: string;
+
+  @ApiProperty({ required: false, description: 'Engine-reported failure reason for failed transfers' })
+  failureReason?: string;
+
+  @ApiProperty({ required: false, description: 'Engine-reported failure code (e.g. ON_CHAIN_FAILED)' })
+  failureCode?: string;
+
   @ApiProperty({ required: false })
   network?: string;
 

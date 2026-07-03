@@ -2533,12 +2533,22 @@ export class TransactionsService {
 
     const amountDisplay = `${Number(txRecord.amount)} ${txRecord.asset}`;
 
-    // Wallet transfers are outgoing from sender's perspective
-    // Since we're viewing from admin perspective, treat as OUTGOING (money leaving platform)
-    const transactionType = this.determineTransactionType(
-      { transaction_type: 'transfer' },
-      'transfer',
-    );
+    // The engine mirrors internal transfers into the recipient's history with
+    // metadata.type='receive'. Those rows are INCOMING for the owning user;
+    // everything else in wallet_transfers is an outgoing send.
+    const meta = (txRecord.metadata ?? {}) as Record<string, unknown>;
+    const transactionType: 'INCOMING' | 'OUTGOING' =
+      meta.type === 'receive' ? 'INCOMING' : 'OUTGOING';
+
+    // Engine records the failure cause on failed sends (metadata.error/code).
+    const failureReason =
+      txRecord.status === 'failed' && typeof meta.error === 'string'
+        ? meta.error
+        : undefined;
+    const failureCode =
+      txRecord.status === 'failed' && typeof meta.code === 'string'
+        ? meta.code
+        : undefined;
 
     return {
       id: txRecord.transfer_id,
@@ -2576,6 +2586,9 @@ export class TransactionsService {
         network: txRecord.network ?? undefined,
       },
       txHash: txRecord.tx_hash,
+      explorerUrl: this.buildExplorerUrl(txRecord.network, txRecord.tx_hash),
+      failureReason,
+      failureCode,
       network: txRecord.network ?? undefined,
       notes: txRecord.note,
       createdAt,
@@ -2583,6 +2596,26 @@ export class TransactionsService {
         ? new Date(Number(txRecord.updated_at))
         : undefined,
     };
+  }
+
+  /** Block explorer link for an on-chain tx hash, keyed by network. */
+  private buildExplorerUrl(
+    network?: string | null,
+    txHash?: string | null,
+  ): string | undefined {
+    if (!txHash) return undefined;
+    switch ((network ?? '').toLowerCase()) {
+      case 'trc20':
+        return `https://tronscan.org/#/transaction/${txHash}`;
+      case 'btc':
+        return `https://blockstream.info/tx/${txHash}`;
+      case 'bep20':
+        return `https://bscscan.com/tx/${txHash}`;
+      case 'erc20':
+        return `https://etherscan.io/tx/${txHash}`;
+      default:
+        return undefined;
+    }
   }
 
   private determineTransactionType(
