@@ -264,6 +264,7 @@ export class UsersService {
       where: { azer_id: id },
       select: {
         azer_id: true,
+        api_key: true,
         last_login_at: true,
         last_login_ip: true,
         last_login_location: true,
@@ -275,8 +276,6 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    // Generate activity entries from available user data
-    // In a real implementation, you would have an activity log table
     const activities: Array<{
       id: string;
       type: string;
@@ -288,7 +287,7 @@ export class UsersService {
       createdAt: string;
     }> = [];
 
-    // Add account creation activity
+    // Account creation
     if (user.timestamp) {
       activities.push({
         id: `${user.azer_id}-create`,
@@ -299,7 +298,7 @@ export class UsersService {
       });
     }
 
-    // Add last login activity if available
+    // Last login
     if (user.last_login_at) {
       activities.push({
         id: `${user.azer_id}-login`,
@@ -309,6 +308,65 @@ export class UsersService {
         ip: user.last_login_ip || undefined,
         createdAt: user.last_login_at.toISOString(),
       });
+    }
+
+    // Real transaction activity, keyed by the user's api_key. Capped per
+    // source — merged and paginated in memory (same pattern as ActivityService).
+    const CAP = 1000;
+    if (user.api_key) {
+      const [transfers, histories] = await Promise.all([
+        this.prisma.client.wallet_transfers.findMany({
+          where: { user_api_key: user.api_key },
+          orderBy: { created_at: 'desc' },
+          take: CAP,
+        }),
+        this.prisma.client.transaction_history.findMany({
+          where: { user_api_key: user.api_key },
+          orderBy: { created_at: 'desc' },
+          take: CAP,
+        }),
+      ]);
+
+      for (const t of transfers) {
+        const meta = (t.metadata ?? {}) as Record<string, unknown>;
+        const isReceive = meta.type === 'receive';
+        activities.push({
+          id: `transfer-${t.transfer_id}`,
+          type: isReceive ? 'CRYPTO_RECEIVE' : 'CRYPTO_SEND',
+          action: isReceive ? 'Crypto Received' : 'Crypto Sent',
+          description: `${isReceive ? 'Received' : 'Sent'} ${Number(t.amount)} ${t.asset} (${t.status ?? 'pending'})`,
+          ip: t.ip_address ?? undefined,
+          userAgent: t.device ?? undefined,
+          metadata: {
+            reference: t.reference,
+            status: t.status ?? undefined,
+            network: t.network ?? undefined,
+            txHash: t.tx_hash ?? undefined,
+          },
+          createdAt: new Date(Number(t.created_at) * 1000).toISOString(),
+        });
+      }
+
+      for (const h of histories) {
+        const kind = (h.transaction_type ?? '').toLowerCase();
+        const label =
+          kind === 'buy' ? 'Bought' : kind === 'sell' ? 'Sold' : 'Converted';
+        activities.push({
+          id: `history-${h.history_id}`,
+          type: 'TRANSACTION',
+          action: `${label} ${h.crypto_sign ?? h.asset_type}`.trim(),
+          description: `${label} ${h.crypto_amount ? Number(h.crypto_amount) : ''} ${h.crypto_sign ?? ''}${h.currency_amount ? ` for ${h.currency_sign ?? ''}${Number(h.currency_amount)}` : ''} (${h.status ?? 'pending'})`.replace(/\s+/g, ' '),
+          ip: h.ip_address ?? undefined,
+          userAgent: h.device ?? undefined,
+          metadata: {
+            reference: h.reference,
+            status: h.status ?? undefined,
+            network: h.network ?? undefined,
+            txHash: h.tx_hash ?? undefined,
+          },
+          createdAt: new Date(Number(h.created_at) * 1000).toISOString(),
+        });
+      }
     }
 
     // Sort by date descending
