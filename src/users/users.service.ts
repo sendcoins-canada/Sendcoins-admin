@@ -18,6 +18,17 @@ export class UsersService {
     // Collect all filter conditions
     const conditions: Prisma.send_coin_userWhereInput[] = [];
 
+    if (query.search) {
+      const term = query.search.trim();
+      conditions.push({
+        OR: [
+          { first_name: { contains: term, mode: 'insensitive' } },
+          { last_name: { contains: term, mode: 'insensitive' } },
+          { user_email: { contains: term, mode: 'insensitive' } },
+        ],
+      });
+    }
+
     if (query.email) {
       conditions.push({
         user_email: {
@@ -125,7 +136,10 @@ export class UsersService {
     const totalPages = Math.ceil(total / limit);
 
     return {
-      users,
+      users: users.map((u) => ({
+        ...u,
+        signupPlatform: this.derivePlatform(u.device),
+      })),
       pagination: {
         page,
         limit,
@@ -190,7 +204,21 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    return user;
+    return { ...user, signupPlatform: this.derivePlatform(user.device) };
+  }
+
+  /**
+   * Best-effort classification of the stored signup device string
+   * (a raw user-agent) into a platform label for the admin UI.
+   */
+  private derivePlatform(device?: string | null): string | undefined {
+    if (!device) return undefined;
+    const d = device.toLowerCase();
+    if (/iphone|ipad|ipod|ios|darwin/.test(d)) return 'iOS';
+    if (/android|okhttp|dalvik/.test(d)) return 'Android';
+    if (/mozilla|chrome|safari|firefox|edge|windows|macintosh|linux/.test(d))
+      return 'Web';
+    return 'Other';
   }
 
   async getStats() {

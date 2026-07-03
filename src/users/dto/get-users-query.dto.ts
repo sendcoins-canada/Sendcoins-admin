@@ -27,6 +27,15 @@ export class GetUsersQueryDto {
   limit?: number = 20;
 
   @ApiProperty({
+    description:
+      'General search across first name, last name, and email (partial, case-insensitive)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiProperty({
     description: 'Filter by email (partial match)',
     required: false,
   })
