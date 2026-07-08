@@ -340,9 +340,12 @@ export class UsersService {
 
     // Real transaction activity, keyed by the user's api_key. Capped per
     // source — merged and paginated in memory (same pattern as ActivityService).
+    // Sources: wallet_transfers, transaction_history (Prisma) +
+    // fiat_bank_transfers (Prisma) + withdrawals, fiat_crypto_conversions,
+    // crypto_fiat_conversions (raw SQL — tables may not exist yet).
     const CAP = 1000;
     if (user.api_key) {
-      const [transfers, histories] = await Promise.all([
+      const [transfers, histories, fiatTransfers] = await Promise.all([
         this.prisma.client.wallet_transfers.findMany({
           where: { user_api_key: user.api_key },
           orderBy: { created_at: 'desc' },
@@ -353,8 +356,14 @@ export class UsersService {
           orderBy: { created_at: 'desc' },
           take: CAP,
         }),
+        this.prisma.client.fiat_bank_transfers.findMany({
+          where: { user_api_key: user.api_key },
+          orderBy: { created_at: 'desc' },
+          take: CAP,
+        }),
       ]);
 
+      // --- wallet_transfers (crypto sends / receives) ---
       for (const t of transfers) {
         const meta = (t.metadata ?? {}) as Record<string, unknown>;
         const isReceive = meta.type === 'receive';
@@ -375,6 +384,7 @@ export class UsersService {
         });
       }
 
+      // --- transaction_history (buy/sell via merchant) ---
       for (const h of histories) {
         const kind = (h.transaction_type ?? '').toLowerCase();
         const label =
@@ -395,6 +405,107 @@ export class UsersService {
           createdAt: new Date(Number(h.created_at) * 1000).toISOString(),
         });
       }
+
+      // --- fiat_bank_transfers (bank payouts) ---
+      for (const f of fiatTransfers) {
+        activities.push({
+          id: `fiat-${f.id}`,
+          type: 'FIAT_TRANSFER',
+          action: 'Bank Payout',
+          description: `Sent ${Number(f.amount)} ${f.currency} to ${f.full_name} — ${f.bank_name} (${f.status ?? 'pending'})`,
+          ip: f.ip_address ?? undefined,
+          userAgent: f.device ?? undefined,
+          metadata: {
+            reference: f.reference,
+            status: f.status ?? undefined,
+            bankName: f.bank_name,
+            accountNumber: f.account_number,
+            country: f.destination_country,
+          },
+          createdAt: new Date(Number(f.created_at) * 1000).toISOString(),
+        });
+      }
+
+      // --- withdrawals (crypto → NGN, raw SQL) ---
+      try {
+        type WithdrawalRow = {
+          id: string; reference: string; source_asset: string;
+          source_amount: string; ngn_amount: string; status: string;
+          created_at: Date;
+        };
+        const withdrawals = await this.prisma.client.$queryRawUnsafe<WithdrawalRow[]>(
+          `SELECT id, reference, source_asset, source_amount, ngn_amount, status, created_at
+           FROM withdrawals WHERE user_api_key = $1 ORDER BY created_at DESC LIMIT $2`,
+          user.api_key, CAP,
+        );
+        for (const wd of withdrawals) {
+          activities.push({
+            id: `withdrawal-${wd.id}`,
+            type: 'WITHDRAWAL',
+            action: 'Withdrawal',
+            description: `Withdrew ${wd.source_amount} ${wd.source_asset} → ${wd.ngn_amount} NGN (${wd.status})`,
+            metadata: { reference: wd.reference, status: wd.status },
+            createdAt: new Date(wd.created_at).toISOString(),
+          });
+        }
+      } catch { /* table may not exist yet */ }
+
+      // --- fiat_crypto_conversions (fiat → crypto buy, raw SQL) ---
+      try {
+        type BuyRow = {
+          conversion_id: number; reference: string; source_currency: string;
+          source_amount: string; destination_asset: string; destination_amount: string;
+          status: string; created_at_timestamp: Date | null;
+        };
+        const buys = await this.prisma.client.$queryRawUnsafe<BuyRow[]>(
+          `SELECT conversion_id, reference, source_currency, source_amount,
+                  destination_asset, destination_amount, status, created_at_timestamp
+           FROM fiat_crypto_conversions WHERE user_api_key = $1 ORDER BY created_at DESC LIMIT $2`,
+          user.api_key, CAP,
+        );
+        for (const buy of buys) {
+          activities.push({
+            id: `buy-${buy.conversion_id}`,
+            type: 'FIAT_CRYPTO_BUY',
+            action: 'Crypto Buy',
+            description: `Bought ${buy.destination_amount} ${buy.destination_asset} with ${buy.source_amount} ${buy.source_currency} (${buy.status})`,
+            metadata: { reference: buy.reference, status: buy.status },
+            createdAt: buy.created_at_timestamp
+              ? new Date(buy.created_at_timestamp).toISOString()
+              : new Date().toISOString(),
+          });
+        }
+      } catch { /* table may not exist yet */ }
+
+      // --- crypto_fiat_conversions (crypto → fiat conversion, raw SQL) ---
+      try {
+        type ConvRow = {
+          conversion_id: number; reference: string; source_asset: string;
+          source_amount: string; destination_currency: string;
+          final_fiat_amount: string; destination_amount: string;
+          status: string; created_at_timestamp: Date | null;
+        };
+        const convs = await this.prisma.client.$queryRawUnsafe<ConvRow[]>(
+          `SELECT conversion_id, reference, source_asset, source_amount,
+                  destination_currency, final_fiat_amount, destination_amount,
+                  status, created_at_timestamp
+           FROM crypto_fiat_conversions WHERE user_api_key = $1 ORDER BY created_at DESC LIMIT $2`,
+          user.api_key, CAP,
+        );
+        for (const conv of convs) {
+          const fiatAmt = conv.final_fiat_amount || conv.destination_amount;
+          activities.push({
+            id: `conversion-${conv.conversion_id}`,
+            type: 'CRYPTO_FIAT_CONVERSION',
+            action: 'Crypto Conversion',
+            description: `Converted ${conv.source_amount} ${conv.source_asset} → ${fiatAmt} ${conv.destination_currency} (${conv.status})`,
+            metadata: { reference: conv.reference, status: conv.status },
+            createdAt: conv.created_at_timestamp
+              ? new Date(conv.created_at_timestamp).toISOString()
+              : new Date().toISOString(),
+          });
+        }
+      } catch { /* table may not exist yet */ }
     }
 
     // Sort by date descending
