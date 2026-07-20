@@ -24,6 +24,7 @@ import { SettingsModule } from './settings/settings.module';
 import { EmailsModule } from './emails/emails.module';
 import { RatesModule } from './rates/rates.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
+import { PayoutsModule } from './payouts/payouts.module';
 // import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { GlobalAuthGuard } from './auth/global-auth.guard';
@@ -53,6 +54,7 @@ import { GlobalAuthGuard } from './auth/global-auth.guard';
     EmailsModule,
     RatesModule,
     CampaignsModule,
+    PayoutsModule,
     // ThrottlerModule.forRoot([
     //   {
     //     ttl: 60_000,
